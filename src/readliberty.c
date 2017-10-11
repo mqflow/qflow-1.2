@@ -1088,7 +1088,7 @@ read_liberty(char *libfile, char *pattern)
 					    *(newcell->values + j * reftable->tsize
 							+ i) = gval * time_unit;
 					    while (*iptr != ' ' && *iptr != '\"' &&
-							*iptr != ',')
+							*iptr != ',' && *iptr != '\0')
 						iptr++;
 					}
 				    }
@@ -1245,6 +1245,7 @@ get_cell_by_name(Cell *cell, char *name)
     Cell *currcell, *newcell;
 
     for (currcell = cell; currcell; currcell = currcell->next) {
+	if (currcell->name == NULL) continue;  /* "don't use" cell */
         if (!strcasecmp(currcell->name, name)) {
             return currcell;
         }
@@ -1260,7 +1261,7 @@ get_pin_by_name(Cell *curcell, char *pinname)
 
     for (curpin = curcell->pins; curpin; curpin = curpin->next) {
         if (!strcmp(curpin->name, pinname)) {
-            printf("found pin %s\n", pinname);
+            // printf("found pin %s\n", pinname);
             return curpin;
         }
     }
@@ -1269,30 +1270,20 @@ get_pin_by_name(Cell *curcell, char *pinname)
 }
 
 void delete_Cell(Cell *cell) {
-    free(cell->name);
-    free(cell->function);
-    free(cell->times);
-    free(cell->caps);
-    free(cell->values);
-
     Pin *curpin = cell->pins;
     Pin *tmppin;
+
+    if (cell->name != NULL) free(cell->name);
+    if (cell->function != NULL) free(cell->function);
+    if (cell->times != NULL) free(cell->times);
+    if (cell->caps != NULL) free(cell->caps);
+    if (cell->values != NULL) free(cell->values);
 
     while (curpin != NULL) {
         tmppin = curpin->next;
         free(curpin->name);
         free(curpin);
         curpin = tmppin;
-    }
-
-    LUTable *curlut = cell->reftable;
-    LUTable *tmplut;
-
-    while (curlut != NULL) {
-        tmplut = curlut->next;
-    /*free(curlut->name);*/
-        /*free(curlut);*/
-        curlut = tmplut;
     }
     free(cell);
 }
@@ -1308,5 +1299,4 @@ delete_cell_list(Cell *cell)
         delete_Cell(currcell);
         currcell = tmpcell;
     }
-
 }

@@ -9,12 +9,13 @@ LIBS =
 LDFLAGS = 
 INSTALL = /bin/install -c
 
-VERSION = 1.1
-REVISION = 45
+VERSION = 1.2
+REVISION = 2
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
 TCLSH_PATH = /bin/tclsh
+HAVE_PYTHON3 = yes
 
 DEFAULTPARSER = @QFLOW_DEFAULT_PARSER@
 
@@ -22,6 +23,7 @@ TCL_SCRIPTS = blif2cel.tcl place2def.tcl place2lef2.tcl
 TCL_SCRIPTS += place2net2.tcl ypostproc.tcl ybuffer.tcl
 TCL_SCRIPTS += decongest.tcl addspacers.tcl getfillcell.tcl
 TCL_SCRIPTS += blifanno.tcl powerbus.tcl
+PYTHON_SCRIPTS = spi2xspice.py
 SHELL_SCRIPTS = synthesize.sh placement.sh router.sh vesta.sh
 SHELL_SCRIPTS += qflow.sh checkdirs.sh
 SHELL_SCRIPTS += cleanup.sh display.sh createGDS.sh
@@ -85,13 +87,18 @@ getfillcell.tcl: getfillcell.tcl.in
 blifanno.tcl: blifanno.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' blifanno.tcl.in > $@
 
-install: $(TCL_SCRIPTS) $(SHELL_SCRIPTS) $(MAIN_SCRIPT)
-	@echo "Installing qflow scripts"
+install: $(TCL_SCRIPTS) $(PYTHON_SCRIPTS) $(SHELL_SCRIPTS) $(MAIN_SCRIPT)
+	@echo "Installing qflow TCL scripts"
 	$(INSTALL) -d $(DESTDIR)${SCRIPTINSTALL}
 	for target in $(TCL_SCRIPTS); do \
 	   $(INSTALL) $$target $(DESTDIR)${SCRIPTINSTALL} ;\
 	done
+	@echo "Installing qflow shell scripts"
 	for target in $(SHELL_SCRIPTS); do \
+	   $(INSTALL) $$target $(DESTDIR)${SCRIPTINSTALL} ;\
+	done
+	@echo "Installing qflow python scripts"
+	for target in $(PYTHON_SCRIPTS); do \
 	   $(INSTALL) $$target $(DESTDIR)${SCRIPTINSTALL} ;\
 	done
 	@echo "Installing qflow executable"

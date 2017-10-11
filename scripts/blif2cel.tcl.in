@@ -29,6 +29,7 @@ set pitchy 0		;# value overridden from LEF file
 set trackskip 0		;# reduce number of implicit feedthroughs
 			;# to avoid routing congestion
 
+
 set arglen [llength $argv]
 set index 0
 while {$index < $arglen} {
@@ -50,22 +51,6 @@ while {$index < $arglen} {
 
 	--cel {
 	    set args(cel) [lindex $argv [incr index]]
-	}
-
-	--pad-config {
-	    set padconfig [lindex $argv [incr index]]
-	}
-
-	--vdd-net {
-	    set vddnet [lindex $argv [incr index]]
-	}
-
-	--gnd-net {
-	    set gndnet [lindex $argv [incr index]]
-	}
-
-	--force-power-net {
-	    set power_force 
 	}
 
 	default  {
@@ -103,12 +88,6 @@ if {[info exists args(cel)]} {
     exit
 }
 
-if {[info exists padconfig]} {
-   if {!([file exists $padconfig])} {
-      puts stderr "File $padconfig doesn't exist"
-      exit
-   }
-}
 
 #-------------------------------------------------------------
 
@@ -124,21 +103,21 @@ if [catch {open $leffile r} flef] {
     puts stderr "Error: second argument is not a LEF file ($leffile)!"
     exit 0
 } else {
-    puts "Loaded LEF file ($leffile) for reading..."
+    puts "Opened LEF file ($leffile) for reading..."
 }
 
 if [catch {open $bliffile r} fnet] {
     puts stderr "Error: can't open file $bliffile for reading!"
     exit 0
 } else {
-    puts "Loaded BLIF file ($bliffile) for reading ..."
+    puts "Opened BLIF file ($bliffile) for reading ..."
 }
 
 if [catch {open $celfile w} fcel] {
     puts stderr "Error: can't open file $celfile for writing!"
     exit 0
 } else {
-    puts "Loaded CEL file ($celfile) for writing..."
+    puts "Opened CEL file ($celfile) for writing..."
 }
 
 set fhardmacro {}
@@ -204,11 +183,11 @@ proc parse_port {pinname macroname leffile ox oy} {
 	    set ${macroname}(${pinname},yp) $yp
 	} elseif [regexp {[ \t]*END[ \t]*$} $line lmatch] { break }
     }
-    puts -nonewline stdout "${pinname}"
-    puts -nonewline stdout " [set ${macroname}(${pinname},xp)]"
-    puts -nonewline stdout " [set ${macroname}(${pinname},yp)]"
-    puts -nonewline stdout " [set ${macroname}(${pinname},layer)]"
-    puts stdout ""
+    # puts -nonewline stdout "${pinname}"
+    # puts -nonewline stdout " [set ${macroname}(${pinname},xp)]"
+    # puts -nonewline stdout " [set ${macroname}(${pinname},yp)]"
+    # puts -nonewline stdout " [set ${macroname}(${pinname},layer)]"
+    # puts stdout ""
 }
 
 #----------------------------------------------------------------
@@ -217,18 +196,18 @@ proc parse_port {pinname macroname leffile ox oy} {
 
 proc parse_pin {pinname macroname leffile ox oy} {
     global $macroname
-    puts "parse_pin"
-    puts "macroname: $macroname, pinname: $pinname"
+    # puts "parse_pin"
+    # puts "macroname: $macroname, pinname: $pinname"
 
     while {[gets $leffile line] >= 0} {
 	if [regexp {[ \t]*PORT} $line lmatch] {
 	    parse_port $pinname $macroname $leffile $ox $oy
 	} elseif [regexp {[ \t]*DIRECTION[ \t]+([^ \t]+)[ \t]*;} $line lmatch porttype] {
-	    puts "Port type: $porttype"
-	    set ${macroname}(${pinname},type) $porttype
+	    # puts "Port type: $porttype"
+	    set ${macroname}(${pinname},type) [string trim $porttype]
 	} elseif [regexp {[ \t]*DIRECTION[ \t]+([^:]+);} $line lmatch porttype] {
-	    puts "Port type: $porttype"
-	    set ${macroname}(${pinname},type) $porttype
+	    # puts "Port type: $porttype"
+	    set ${macroname}(${pinname},type) [string trim $porttype]
 	} elseif [regexp {[ \t]*END[ \t]+([^ \t]+)[ \t]*$} $line lmatch pintest] {
 	    if {"$pintest" == "$pinname"} {
 		break
@@ -324,7 +303,8 @@ proc parse_layer {leffile layername} {
 proc parse_hard_macro {leffile macroname} {
     global $macroname units
 
-    puts stderr "Parsing hard macro $macroname:  Ports are:"
+    # puts stderr "Parsing hard macro $macroname:  Ports are:"
+    puts stderr "Parsing hard macro $macroname"
     while {[gets $leffile line] >= 0} {
 	if [regexp {[ \t]*SYMMETRY[ \t]+(.+)[ \t]*;} $line lmatch symmetry] {
 	    set ${macroname}(symmetry) $symmetry
@@ -378,7 +358,8 @@ proc parse_hard_macro {leffile macroname} {
 proc parse_macro {leffile macroname} {
     global $macroname units
 
-    puts stderr "Parsing macro $macroname:  Ports are:"
+    # puts stderr "Parsing macro $macroname:  Ports are:"
+    puts stderr "Parsing macro $macroname"
     while {[gets $leffile line] >= 0} {
 	if [regexp {[ \t]*SYMMETRY[ \t]+(.+)[ \t]*;} $line lmatch symmetry] {
 	    set ${macroname}(symmetry) $symmetry
@@ -576,8 +557,6 @@ flush stdout
 set fnet [open $bliffile r]
 set mode none
 set i 0
-set hi 0
-
 while {[gets $fnet line] >= 0} {
     if [regexp {^[ \t]*\.gate[ \t]+([^ \t]+)[ \t]+(.*)$} $line lmatch macroname rest] {
 	set mode $macroname
@@ -648,28 +627,6 @@ while {[gets $fnet line] >= 0} {
 	    }
 	    flush stdout
 	}
-
-	if {[info exists power_force]} {
-		if {[info exists vddnet]} {
-			set pinx [set ${mode}(${vddnet},xp)]
-			set piny [set ${mode}(${vddnet},yp)]
-			set pinlayer [set ${mode}(${vddnet},layer)]
-			set pintype [set ${mode}(${vddnet},type)]
-			puts -nonewline $fcel "pin name $vddnet signal $vddnet layer "
-			puts $fcel "$pinlayer $pinx $piny"
-		}
-
-		if {[info exists gndnet]} {
-			set pinx [set ${mode}(${gndnet},xp)]
-			set piny [set ${mode}(${gndnet},yp)]
-			set pinlayer [set ${mode}(${gndnet},layer)]
-			set pintype [set ${mode}(${gndnet},type)]
-			puts -nonewline $fcel "pin name $gndnet signal $gndnet layer "
-			puts $fcel "$pinlayer $pinx $piny"
-		}
-	}
-
-
     } elseif [regexp {^[ \t]*\.inputs} $line lmatch] {
 	set mode "pins"
     } elseif [regexp {^[ \t]*\.outputs} $line lmatch] {
@@ -692,41 +649,6 @@ flush stdout
 
 set px [expr int($pitchx / 2)]
 set py [expr int($pitchy / 2)]
-set pmul 1
-
-set pad_fixed False
-array set pad_positions {}
-set placedpads {}
-set powerpads {}
-
-if {[info exists padconfig]} {
-	set pad_fixed True
-	set fpads [open $padconfig r]
-	while {[gets $fpads line] >= 0} {
-		if [regexp {^[ \t]*px:[ \t]+(.*)$} $line lmatch len] {
-			set px $len
-		}
-		if [regexp {^[ \t]*py:[ \t]+(.*)$} $line lmatch len] {
-			set py $len
-		}
-		if [regexp {^[ \t]*side[ \t]+(.*):[ \t]+(.*)$} $line lmatch side bank] {
-			foreach fixed_pad $bank {
-				set pad_positions($fixed_pad) $side
-			}
-		}
-		if [regexp {^[ \t]*power pads:[ \t]+(.*)$} $line lmatch ppads] {
-			foreach ppad $ppads {
-				lappend powerpads $ppad
-			}
-		}
-		if [regexp {^[ \t]*power multiplier:[ \t]+(.*)$} $line lmatch pfactor] {
-			set pmul $pfactor
-		}
-		if [regexp {^[ \t]*side space:[ \t]+(.*)$} $line lmatch len] {
-			set side_space $len
-		}
-	}
-}
 
 set fnet [open $bliffile r]
 set mode none
@@ -757,18 +679,6 @@ while {[gets $fnet line] >= 0} {
 	    incr padnum
 	}
     }
-}
-
-foreach pinname $powerpads {
-	for {set i 1} {$i <= $pmul} {incr i} {
-		foreach side [list "T" "L" "R" "B"] {
-			puts $fcel "pad $padnum name twpin_$side.$pinname<$i>"
-			puts $fcel "corners 4 -$px -$py -$px $py $px $py $px -$py  restrict side $side"
-			puts $fcel "pin name $pinname signal $pinname layer 1 0 0"
-			puts $fcel ""
-			incr padnum
-		}
-	}
 }
 
 puts stdout "Done!"

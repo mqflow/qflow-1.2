@@ -57,19 +57,50 @@ if (-f project_vars.sh) then
    source project_vars.sh
 endif
 
+# "-nog" (no graphics) has no graphics or console.  "-noc"
+# (no console) has graphics but no console.  Console must
+# always be disabled or else the script cannot capture the
+# qrouter output.
+
 if (! ${?qrouter_options} ) then
    set qrouter_options = ${options}
 endif
 
-# logfile should exist, but just in case. . .
-touch ${synthlog}
+if (! ${?route_show} ) then
+   set qrouter_options = "-nog ${qrouter_options}"
+else
+   if (${route_show} == 1) then
+      set qrouter_options = "-noc ${qrouter_options}"
+   else
+      set qrouter_options = "-nog ${qrouter_options}"
+   endif
+endif
 
-# Check if last line of log file says "error condition"
-set errcond = `tail -1 ${synthlog} | grep "error condition" | wc -l`
-if ( ${errcond} == 1 ) then
-   echo "Synthesis flow stopped on error condition.  Detail routing"
-   echo "will not proceed until error condition is cleared."
-   exit 1
+if (!($?logdir)) then
+   set logdir=${projectpath}/log
+endif
+mkdir -p ${logdir}
+set lastlog=${logdir}/place.log
+set synthlog=${logdir}/route.log
+rm -f ${synthlog} >& /dev/null
+rm -f ${logdir}/post_sta.log >& /dev/null
+touch ${synthlog}
+set date=`date`
+echo "Qflow route logfile created on $date" > ${synthlog}
+
+# Check if last line of placement log file says "error condition"
+if ( ! -f ${lastlog} ) then
+   set lastlog=${logdir}/synth.log
+endif
+if ( ! -f ${lastlog} ) then
+   echo "Warning:  No placement or static timing analysis logfiles found."
+else
+   set errcond = `tail -1 ${lastlog} | grep "error condition" | wc -l`
+   if ( ${errcond} == 1 ) then
+      echo "Synthesis flow stopped on error condition.  Detail routing"
+      echo "will not proceed until error condition is cleared."
+      exit 1
+   endif
 endif
 
 # Prepend techdir to leffile unless leffile begins with "/"
@@ -115,10 +146,11 @@ if (${scripting} == "T") then
 #------------------------------------------------------------------
 
    echo "Running qrouter $version"
-   ${bindir}/qrouter -noc -s ${rootname}.cfg ${qrouter_options} \
+   echo "qrouter ${qrouter_options} -s ${rootname}.cfg" |& tee -a ${synthlog} 
+   ${bindir}/qrouter ${qrouter_options} -s ${rootname}.cfg \
 		|& tee -a ${synthlog} | \
 		grep - -e fail -e Progress -e remaining.\*00\$ \
-		-e remaining:\ \[1-9\]0\\\?\$
+		-e remaining:\ \[1-9\]0\\\?\$ -e \\\*\\\*\\\*
 else
 
 #------------------------------------------------------------------
@@ -128,10 +160,12 @@ else
 #------------------------------------------------------------------
 
    echo "Running qrouter $version"
+   echo "qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} ${qrouter_options} ${rootname}" \
+		 |& tee -a ${synthlog}
    ${bindir}/qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} \
 		${qrouter_options} ${rootname} |& tee -a ${synthlog} | \
 		grep - -e fail -e Progress -e remaining.\*00\$ \
-		-e remaining:\ \[1-9\]0\\\?\$
+		-e remaining:\ \[1-9\]0\\\?\$ -e \\\*\\\*\\\*
 endif
 
 #---------------------------------------------------------------------

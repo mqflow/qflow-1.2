@@ -11,7 +11,7 @@ if ($#argv < 2) then
 endif
 
 # Split out options from the main arguments
-set argline=(`getopt "nr" $argv[1-]`)
+set argline=(`getopt "d" $argv[1-]`)
 
 set options=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $1}'`
 set cmdargs=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $2}'`
@@ -26,8 +26,23 @@ else
    echo       <project_path> is the name of the project directory containing
    echo                 a file called qflow_vars.sh.
    echo       <source_name> is the root name of the verilog file
+   echo	      [options] are:
+   echo			-d	use delay file to back-annotate wire delays
+   echo
    exit 1
 endif
+
+set dodelays=0
+
+foreach option (${argline})
+   switch (${option})
+      case -d:
+         set dodelays=1
+         breaksw
+      case --:
+         break
+   endsw
+end
 
 set projectpath=$argv1
 set sourcename=$argv2
@@ -50,14 +65,30 @@ if (-f project_vars.sh) then
 endif
 
 if (! ${?vesta_options} ) then
-   set vesta_options = ${options}
+   set vesta_options = ""
 endif
 
-# logfile should exist, but just in case. . .
+if (!($?logdir)) then
+   set logdir=${projectpath}/log
+endif
+mkdir -p ${logdir}
+if ($dodelays == 1) then
+   set lastlog=${logdir}/route.log
+   set synthlog=${logdir}/post_sta.log
+else
+   set lastlog=${logdir}/place.log
+   set synthlog=${logdir}/sta.log
+   rm -f ${logdir}/route.log >& /dev/null
+   rm -f ${logdir}/post_sta.log >& /dev/null
+endif
+rm -f ${synthlog} >& /dev/null
 touch ${synthlog}
+set date=`date`
+echo "Qflow static timing analysis logfile created on $date" > ${synthlog}
+
 
 # Check if last line of log file says "error condition"
-set errcond = `tail -1 ${synthlog} | grep "error condition" | wc -l`
+set errcond = `tail -1 ${lastlog} | grep "error condition" | wc -l`
 if ( ${errcond} == 1 ) then
    echo "Synthesis flow stopped on error condition.  Static timing analysis"
    echo "will not proceed until error condition is cleared."
@@ -76,14 +107,65 @@ endif
 # Done with initialization
 #----------------------------------------------------------
 
-cd ${synthdir}
+# Check if last line of log file says "error condition"
+set errcond = `tail -1 ${lastlog} | grep "error condition" | wc -l`
+if ( ${errcond} == 1 ) then
+   echo "Synthesis flow stopped on error condition.  Timing analysis will not"
+   echo "proceed until error condition is cleared."
+   exit 1
+endif
+
+cd ${layoutdir}
 
 #------------------------------------------------------------------
 # Generate the static timing analysis results
 #------------------------------------------------------------------
 
+if ($dodelays == 1) then
+    # Check if a .rc file exists.  This file is produced by qrouter
+    # and contains delay information in nested RC pairs
+    if ( -f ${rootname}.rc ) then
+
+       # Run rc2dly
+       echo "Converting qrouter output to vesta delay format" |& tee -a ${synthlog}
+       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.dly" \
+		|& tee -a ${synthlog}
+       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} -d ${synthdir}/${rootname}.dly
+
+       cd ${synthdir}
+
+       # Spot check for output file
+       if ( !( -f ${rootname}.dly || \
+		( -M ${rootname}.dly < -M ${layoutdir}/${rootname}.rc ))) then
+	  echo "rc2dly failure:  No file ${rootname}.dly created." \
+		|& tee -a ${synthlog}
+          echo "Premature exit." |& tee -a ${synthlog}
+          echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+          exit 1
+       endif
+
+       # Add delay file to vesta options, assuming it exists.
+       set vesta_options = "-c -d ${rootname}.dly ${vesta_options}"
+    else
+       echo "Error:  No file ${rootname}.dly, cannot back-annotate delays!" \
+		|& tee -a ${synthlog}
+       echo "Premature exit." |& tee -a ${synthlog}
+       echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+       exit 1
+    endif
+endif
+
+cd ${synthdir}
+
 echo ""
-echo "Running vesta static timing analysis"
+if ($dodelays == 1) then
+   echo "Running vesta static timing analysis with back-annotated extracted wire delays" \
+		|& tee -a ${synthlog}
+else
+   echo "Running vesta static timing analysis" |& tee -a ${synthlog}
+endif
+echo "vesta ${vesta_options} ${rootname}.rtlnopwr.v ${libertypath}" \
+		|& tee -a ${synthlog}
 echo ""
 ${bindir}/vesta ${vesta_options} ${rootname}.rtlnopwr.v \
 		${libertypath} |& tee -a ${synthlog}

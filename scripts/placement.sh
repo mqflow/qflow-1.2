@@ -106,15 +106,26 @@ else
    set spicepath=${techdir}/${spicefile}
 endif
 
-# logfile should exist, but just in case. . .
+if (!($?logdir)) then
+   set logdir=${projectpath}/log
+endif
+mkdir -p ${logdir}
+set lastlog=${logdir}/synth.log
+set synthlog=${logdir}/place.log
+rm -f ${synthlog} >& /dev/null
+rm -f ${logdir}/sta.log >& /dev/null
+rm -f ${logdir}/route.log >& /dev/null
+rm -f ${logdir}/post_sta.log >& /dev/null
 touch ${synthlog}
+set date=`date`
+echo "Qflow placement logfile created on $date" > ${synthlog}
 
 #----------------------------------------------------------
 # Done with initialization
 #----------------------------------------------------------
 
 # Check if last line of log file says "error condition"
-set errcond = `tail -1 ${synthlog} | grep "error condition" | wc -l`
+set errcond = `tail -1 ${lastlog} | grep "error condition" | wc -l`
 if ( ${errcond} == 1 ) then
    echo "Synthesis flow stopped on error condition.  Placement will not proceed"
    echo "until error condition is cleared."
@@ -127,32 +138,18 @@ endif
 
 cd ${projectpath}
 
-echo "Running blif2cel.tcl" |& tee -a ${synthlog}
+echo "Running blif2cel to generate input files for graywolf" |& tee -a ${synthlog}
+echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif --lef ${lefpath} --cel ${layoutdir}/${rootname}.cel" |& tee -a ${synthlog}
 
-set blif2cel_commands = ""
-
-if ( ${?hard_cells} ) then
-	foreach cell (${hard_cells})
-		set blif2cel_commands = "${blif2cel_commands} --hard-macro ${cell}"
-	end
+${scriptdir}/blif2cel.tcl --blif ${synthdir}/${rootname}.blif \
+	--lef ${lefpath} --cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
+set errcond = $status
+if ( ${errcond} != 0 ) then
+   echo "blif2cel.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+   echo "Premature exit." |& tee -a ${synthlog}
+   echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+   exit 1
 endif
-
-if ( ${?pad_config} ) then
-	set blif2cel_commands = "${blif2cel_commands} --pad-config ${pad_config}"
-endif
-
-if ( ${?vddnet} ) then
-	set blif2cel_commands = "${blif2cel_commands} --vdd-net ${vddnet}"
-endif
-
-if ( ${?gndnet} ) then
-	set blif2cel_commands = "${blif2cel_commands} --gnd-net ${gndnet}"
-endif
-
-${scriptdir}/blif2cel.tcl \
-	--blif ${synthdir}/${rootname}.blif\
-	${blif2cel_commands} --lef ${lefpath}\
-	--cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
 
 #---------------------------------------------------------------------
 # Spot check:  Did blif2cel produce file ${rootname}.cel?
@@ -177,9 +174,19 @@ endif
 cd ${layoutdir}
 
 if ( ${?initial_density} ) then
-   echo "Running decongest to set initial density of ${initial_density}"
+   echo "Running decongest to set initial density of ${initial_density}" \
+		|& tee -a ${synthlog}
+   echo "decongest.tcl ${rootname} ${lefpath} ${fillcell} ${initial_density}" \
+		|& tee -a ${synthlog}
    ${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
 		${fillcell} ${initial_density} |& tee -a ${synthlog}
+   set errcond = $status
+   if ( ${errcond} != 0 ) then
+	 echo "decongest.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+	 echo "Premature exit." |& tee -a ${synthlog}
+	 echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+	 exit 1
+   endif
    cp ${rootname}.cel ${rootname}.cel.bak
    mv ${rootname}.acel ${rootname}.cel
 endif
@@ -221,20 +228,6 @@ else
    echo "continuing without pin placement hints" |& tee -a ${synthlog}
 endif
 
-# Add fill cells for the power bus stripes
-# (this is work in progress, commented out for now)
-
-# echo "Running powerbus to add spacers for power bus stripes" |& tee -a ${synthlog}
-# ${scriptdir}/powerbus.tcl ${rootname} ${lefpath} ${fillcell} |& tee -a ${synthlog}
-
-# powerbus.tcl creates a .acel file if successful.  If not, then
-# leave the .cel file in place
-
-if ( -f ${rootname}.acel && ( -M ${rootname}.acel >= -M ${rootname}.cel )) then
-   cp ${rootname}.cel ${rootname}.cel.bak
-   mv ${rootname}.acel ${rootname}.cel
-endif
-
 #-----------------------------------------------
 # 1) Run GrayWolf
 #-----------------------------------------------
@@ -248,7 +241,15 @@ if ( !( ${?graywolf_options} )) then
 endif
 
 echo "Running GrayWolf placement" |& tee -a ${synthlog}
-   ${bindir}/graywolf ${graywolf_options} $rootname >>& ${synthlog}
+echo "graywolf ${graywolf_options} $rootname" |& tee -a ${synthlog}
+${bindir}/graywolf ${graywolf_options} $rootname >>& ${synthlog}
+
+set errcond = $status
+if ( ${errcond} != 0 ) then
+   echo "graywolf failed with exit status ${errcond}" |& tee -a ${synthlog}
+   echo "Premature exit." |& tee -a ${synthlog}
+   echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+   exit 1
 endif
 
 #---------------------------------------------------------------------
@@ -317,7 +318,8 @@ if ($makedef == 1) then
    # been disabled, or else we'll try passing $fillcell directly to
    # place2def
 
-   echo "Running getfillcell.tcl" |& tee -a ${synthlog}
+   echo "Running getfillcell to determine cell to use for fill." |& tee -a ${synthlog}
+   echo "getfillcell.tcl $rootname ${lefpath} $fillcell" |& tee -a ${synthlog}
    set usefillcell = `${scriptdir}/getfillcell.tcl $rootname \
 	${lefpath} $fillcell | grep fill= | cut -d= -f2`
 
@@ -329,8 +331,18 @@ if ($makedef == 1) then
    # Run place2def to turn the GrayWolf output into a DEF file
 
    if ( ${?route_layers} ) then
+      echo "Running place2def to translate graywolf output to DEF format." \
+		|& tee -a ${synthlog}
+      echo "place2def.tcl $rootname $usefillcell ${route_layers}" |& tee -a ${synthlog}
       ${scriptdir}/place2def.tcl $rootname $usefillcell ${route_layers} \
 		 >>& ${synthlog}
+      set errcond = $status
+      if ( ${errcond} != 0 ) then
+	 echo "place2def.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+	 echo "Premature exit." |& tee -a ${synthlog}
+	 echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+	 exit 1
+      endif
    else
       ${scriptdir}/place2def.tcl $rootname $usefillcell >>& ${synthlog}
    endif
@@ -346,8 +358,50 @@ if ($makedef == 1) then
       exit 1
    endif
 
-   # Copy the .def file to a backup called "unroute" (temporary)
-   cp ${rootname}.def ${rootname}_unroute.def
+   #---------------------------------------------------------------------
+   # Add spacer cells to create a straight border on the right side
+   #---------------------------------------------------------------------
+
+   if ( -f ${scriptdir}/addspacers.tcl ) then
+
+      if ( !( ${?addspacers_options} )) then
+         set addspacers_options = ""
+      endif
+
+      if ( "$techleffile" != "" ) then
+         set addspacers_options = "-techlef ${techlefpath} ${addspacers_options}"
+      endif
+
+      echo "Running addspacers to generate power stripes and align cell right edge" \
+		|& tee -a ${synthlog}
+      echo "addspacers.tcl ${addspacers_options} ${rootname} ${lefpath} ${fillcell}" \
+		|& tee -a ${synthlog}
+
+      ${scriptdir}/addspacers.tcl ${addspacers_options} \
+		${rootname} ${lefpath} ${fillcell} >>& ${synthlog}
+      set errcond = $status
+      if ( ${errcond} != 0 ) then
+	 echo "addspacers.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+	 echo "Premature exit." |& tee -a ${synthlog}
+	 echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+	 exit 1
+      endif
+
+      if ( -f ${rootname}_filled.def ) then
+	 mv ${rootname}_filled.def ${rootname}.def
+	 # Copy the .def file to a backup called "unroute"
+	 cp ${rootname}.def ${rootname}_unroute.def
+      endif
+
+      if ( -f ${rootname}.obsx ) then
+         # If addspacers annotated the .obs (obstruction) file, then
+         # overwrite the original.
+	 mv ${rootname}.obsx ${rootname}.obs
+      endif
+   else
+      # Copy the .def file to a backup called "unroute"
+      cp ${rootname}.def ${rootname}_unroute.def
+   endif
 
    # If the user didn't specify a number of layers for routing as part of
    # the project variables, then the info file created by qrouter will have
@@ -360,10 +414,11 @@ if ($makedef == 1) then
 
    # Create the main configuration file
 
-   # Variables "via_pattern" (none, normal, invert) and "via_stacks"
-   # can be specified in the tech script, and are appended to the
-   # qrouter configuration file.  via_stacks defaults to 2 if not
-   # specified.  It can be overridden from the user's .cfg2 file.
+   # Variables "via_pattern" (none, normal, invert), "via_stacks",
+   # and "via_use" can be specified in the tech script, and are
+   # appended to the qrouter configuration file.  via_stacks defaults
+   # to 2 if not specified.  It can be overridden from the user's .cfg2
+   # file.
 
    if (${scripting} == "T") then
       echo "# qrouter runtime script for project ${rootname}" > ${rootname}.cfg
@@ -374,14 +429,18 @@ if ($makedef == 1) then
       endif
       echo "read_lef ${lefpath}" >> ${rootname}.cfg
       echo "catch {layers ${route_layers}}" >> ${rootname}.cfg
+      if ( ${?via_use} ) then
+         echo "" >> ${rootname}.cfg
+         echo "via use ${via_use}" >> ${rootname}.cfg
+      endif
       if ( ${?via_pattern} ) then
          echo "" >> ${rootname}.cfg
          echo "via pattern ${via_pattern}" >> ${rootname}.cfg
       endif
       if (! ${?via_stacks} ) then
          set via_stacks=2
-         echo "via stack ${via_stacks}" >> ${rootname}.cfg
       endif
+      echo "via stack ${via_stacks}" >> ${rootname}.cfg
       if ( ${?vddnet} ) then
 	 echo "vdd $vddnet" >> ${rootname}.cfg
       endif
@@ -408,6 +467,7 @@ if ($makedef == 1) then
    endif
 
    # Add obstruction fence around design, created by place2def.tcl
+   # and modified by addspacers.tcl
 
    if ( -f ${rootname}.obs ) then
       cat ${rootname}.obs >> ${rootname}.cfg
@@ -429,14 +489,11 @@ if ($makedef == 1) then
       cat ${rootname}.cfg2 >> ${rootname}.cfg
    else
       if (${scripting} == "T") then
-	 if (${final} == 0) then
-	    echo "qrouter::congestion_route ${rootname}.cinfo" >> ${rootname}.cfg
-	 else
-	    echo "qrouter::standard_route" >> ${rootname}.cfg
-	    # Standard route falls back to the interpreter on failure,
-	    # so make sure that qrouter actually exits.
-	    echo "quit" >> ${rootname}.cfg
-	 endif
+	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
+	 echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
+	 # Standard_route's automatic quit has been subverted in order
+	 # to write the delay file, so make sure that qrouter actually exits.
+	 echo "quit" >> ${rootname}.cfg
       endif
    endif
 
@@ -449,8 +506,17 @@ if ($makedef == 1) then
    # netlists.
    #------------------------------------------------------------------
 
+   echo "blifanno.tcl ${synthdir}/${rootname}.blif ${rootname}.def ${synthdir}/${rootname}_anno.blif" \
+	|& tee -a ${synthlog}
    ${scriptdir}/blifanno.tcl ${synthdir}/${rootname}.blif ${rootname}.def \
 		${synthdir}/${rootname}_anno.blif >>& ${synthlog}
+   set errcond = $status
+   if ( ${errcond} != 0 ) then
+      echo "blifanno.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+      echo "Premature exit." |& tee -a ${synthlog}
+      echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+      exit 1
+   endif
 
    #------------------------------------------------------------------
    # Spot check:  Did blifanno.tcl produce an output file?
@@ -475,6 +541,16 @@ if ($makedef == 1) then
       echo "" >> ${synthlog}
 
       cd ${synthdir}
+
+      #------------------------------------------------------------------
+      # Copy the original rtl.v and rtlnopwr.v for use in comparison of
+      # pre- and post-placement netlists.
+      #------------------------------------------------------------------
+
+      echo "Copying ${rootname}.rtl.v and ${rootname}.rtlnopwr.v to backups"
+      cp ${rootname}.rtl.v ${rootname}_synth.rtl.v
+      cp ${rootname}.rtlnopwr.v ${rootname}_synth.rtlnopwr.v
+
       echo "Running blif2Verilog." |& tee -a ${synthlog}
       ${bindir}/blif2Verilog -c -v ${vddnet} -g ${gndnet} \
 		${rootname}_anno.blif > ${rootname}.rtl.v
@@ -483,7 +559,7 @@ if ($makedef == 1) then
 		${rootname}_anno.blif > ${rootname}.rtlnopwr.v
 
       echo "Running blif2BSpice." |& tee -a ${synthlog}
-      ${bindir}/blif2BSpice -p ${vddnet} -g ${gndnet} -l \
+      ${bindir}/blif2BSpice -i -p ${vddnet} -g ${gndnet} -l \
 		${spicepath} ${rootname}_anno.blif \
 		> ${rootname}.spc
 
@@ -513,24 +589,6 @@ if ($makedef == 1) then
       cd ${layoutdir}
 
     endif
-endif
-
-#---------------------------------------------------
-# 3) Add spacer cells to create a straight border on
-#    the right side
-#---------------------------------------------------
-
-if ($makedef == 1) then
-   if ( -f ${scriptdir}/addspacers.tcl ) then
-      echo "Running addspacers.tcl"
-      ${scriptdir}/addspacers.tcl ${rootname} ${lefpath} \
-		$fillcell >>& ${synthlog}
-      if ( -f ${rootname}_filled.def ) then
-	 mv ${rootname}_filled.def ${rootname}.def
-	 # Copy the .def file to a backup called "unroute" (final)
-	 cp ${rootname}.def ${rootname}_unroute.def
-      endif
-   endif
 endif
 
 #---------------------------------------------------
