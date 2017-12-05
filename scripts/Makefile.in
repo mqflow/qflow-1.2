@@ -15,6 +15,7 @@ REVISION = @REVISION@
 QFLOW_LIB_DIR = @QFLOW_LIB_DIR@
 QFLOW_BIN_DIR = @QFLOW_BIN_DIR@
 TCLSH_PATH = @TCLSH_PATH@
+ENV_PATH = @ENV_PATH@
 HAVE_PYTHON3 = @HAVE_PYTHON3@
 
 DEFAULTPARSER = @QFLOW_DEFAULT_PARSER@
@@ -54,13 +55,16 @@ qflow.sh:  qflow.sh.in
 	-e '/QFLOW_VERSION/s#QFLOW_VERSION#$(VERSION)#' \
 	qflow.sh.in > qflow.sh
 
+spi2xspice.py: spi2xspice.py.in
+	sed -e 's#ENV_PATH#$(ENV_PATH)#' spi2xspice.py.in > $@
+
 blif2cel.tcl: blif2cel.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' blif2cel.tcl.in > $@
 
 place2def.tcl: place2def.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' place2def.tcl.in > $@
 
-place2lef2.tcl: place2def2.tcl.in
+place2lef2.tcl: place2lef2.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' place2lef2.tcl.in > $@
 
 place2net2.tcl: place2net2.tcl.in
