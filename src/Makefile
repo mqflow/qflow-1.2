@@ -76,5 +76,9 @@ veryclean:
 	$(RM) -f $(OBJECTS) $(HASHLIB) $(LIBERTYLIB)
 	$(RM) -f $(TARGETS)
 
+distclean:
+	$(RM) -f $(OBJECTS) $(HASHLIB) $(LIBERTYLIB)
+	$(RM) -f $(TARGETS)
+
 .c.o:
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(DEFS) -c $< -o $@

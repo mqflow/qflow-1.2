@@ -10,11 +10,12 @@ LDFLAGS =
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 2
+REVISION = 14
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
 TCLSH_PATH = /bin/tclsh
+ENV_PATH = /bin/env
 HAVE_PYTHON3 = yes
 
 DEFAULTPARSER = @QFLOW_DEFAULT_PARSER@
@@ -54,13 +55,16 @@ qflow.sh:  qflow.sh.in
 	-e '/QFLOW_VERSION/s#QFLOW_VERSION#$(VERSION)#' \
 	qflow.sh.in > qflow.sh
 
+spi2xspice.py: spi2xspice.py.in
+	sed -e 's#ENV_PATH#$(ENV_PATH)#' spi2xspice.py.in > $@
+
 blif2cel.tcl: blif2cel.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' blif2cel.tcl.in > $@
 
 place2def.tcl: place2def.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' place2def.tcl.in > $@
 
-place2lef2.tcl: place2def2.tcl.in
+place2lef2.tcl: place2lef2.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' place2lef2.tcl.in > $@
 
 place2net2.tcl: place2net2.tcl.in
@@ -106,6 +110,12 @@ install: $(TCL_SCRIPTS) $(PYTHON_SCRIPTS) $(SHELL_SCRIPTS) $(MAIN_SCRIPT)
 	$(INSTALL) ${MAIN_SCRIPT} $(DESTDIR)${EXECINSTALL}
 
 clean:
+	$(RM) $(MAIN_SCRIPT)
+	$(RM) checkdirs.sh
+	$(RM) qflow.sh
+	$(RM) $(TCL_SCRIPTS)
+
+distclean:
 	$(RM) $(MAIN_SCRIPT)
 	$(RM) checkdirs.sh
 	$(RM) qflow.sh
