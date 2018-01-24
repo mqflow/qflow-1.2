@@ -37,5 +37,8 @@ install: ${TECH_FILES}
 clean:
 	$(RM) -f gscl45nm.magicrc
 
+distclean:
+	$(RM) -f gscl45nm.magicrc
+
 uninstall:
 
