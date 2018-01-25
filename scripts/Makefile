@@ -4,17 +4,17 @@
 
 # Main compiler arguments
 CFLAGS = -g -O2
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\"
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/usr/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"\" -DQFLOW_QROUTER_PATH=\"\" -DQFLOW_GRAYWOLF_PATH=\"\" -DQFLOW_YOSYS_PATH=\"\"
 LIBS = 
 LDFLAGS = 
-INSTALL = /bin/install -c
+INSTALL = /usr/bin/install -c
 
 VERSION = 1.2
-REVISION = 15
+REVISION = 16
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
-TCLSH_PATH = /bin/tclsh
+TCLSH_PATH = /usr/bin/tclsh
 ENV_PATH = /bin/env
 HAVE_PYTHON3 = yes
 
