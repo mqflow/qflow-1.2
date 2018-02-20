@@ -369,7 +369,7 @@ if ($makedef == 1) then
    # Add spacer cells to create a straight border on the right side
    #---------------------------------------------------------------------
 
-   if ( -f ${scriptdir}/addspacers.tcl ) then
+   if ( !(${?nospacers}) && (-f ${scriptdir}/addspacers.tcl) ) then
 
       if ( !( ${?addspacers_options} )) then
          set addspacers_options = ""
