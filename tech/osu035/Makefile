@@ -4,7 +4,7 @@
 
 # Main compiler arguments
 CFLAGS = -g -O2
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\"
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\"
 LIBS = 
 LDFLAGS = 
 INSTALL = /bin/install -c
@@ -14,7 +14,7 @@ QFLOW_LIB_DIR = /usr/local/share/qflow
 TECH_FILES = osu035.par osu035_stdcells.lef osu035.sh
 TECH_FILES += osu035_stdcells.sp osu035.magicrc osu035.prm
 TECH_FILES += SCN4M_SUBM.20.tech osu035_stdcells.lib
-TECH_FILES += osu035_stdcells.v
+TECH_FILES += osu035_stdcells.v osu035_setup.tcl osu035_stdcells.gds2
 
 TECHINSTALL = ${QFLOW_LIB_DIR}/tech
 

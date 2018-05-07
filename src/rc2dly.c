@@ -32,6 +32,7 @@
 //
 // Written by Russell Freisenhahn
 // Added to qflow August 12, 2017
+// Added alternate SPEF output format December 6, 2017 (Tim Edwards)
 
 #include <errno.h>
 #include <stdio.h>
@@ -39,12 +40,21 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <time.h>
 
 #include "readliberty.h"	/* liberty file database */
 
 #define SRC     0x01    // node is a driver
 #define SNK     0x02    // node is a receiver
 #define INT     0x03    // node is internal to an interconnect
+
+#define FORMAT_VESTA 0
+#define FORMAT_SPEF  1
+#define FORMAT_SDF   2
+
+#define VISIT_CONN 0
+#define VISIT_CAP  1
+#define VISIT_RES  2
 
 typedef struct _r *rptr;
 typedef struct _node *nodeptr;
@@ -68,6 +78,7 @@ typedef struct _node {
     char*       name;
     int         type;
     ritemptr    rlist;
+    ritemptr    rlist_end;	/* To avoid having to find the list end */
     double      nodeCap;
     double      totCapDownstream;
     double      totCapDownstreamLessGates;
@@ -161,6 +172,11 @@ nodeptr create_node (char *name, int type, double nodeCap) {
     strcpy(new_node->name, name);
     new_node->type = type;
     new_node->nodeCap = nodeCap;
+    new_node->rlist = NULL;
+    new_node->rlist_end = NULL;
+    new_node->totCapDownstream = 0.0;
+    new_node->totCapDownstreamLessGates = 0.0;
+    new_node->visited = 0;
 
     return new_node;
 }
@@ -196,7 +212,7 @@ void add_node_item (node_item_ptr *node_item_list_ptr, nodeptr n, node_item_ptr 
     }
 }
 
-void add_ritem (ritemptr *ritem_list_ptr, rptr r) {
+void add_ritem (ritemptr *ritem_list_ptr, rptr r, ritemptr *ritem_last_ptr) {
     ritemptr next = calloc(1, sizeof(ritem));
     next->r = r;
 
@@ -205,6 +221,11 @@ void add_ritem (ritemptr *ritem_list_ptr, rptr r) {
 
         *ritem_list_ptr = next;
 
+    } else if (*ritem_last_ptr != NULL) {
+	ritemptr i;
+	i = *ritem_last_ptr;
+	i->next = next;
+	*ritem_last_ptr = next;
     } else {
 
     // list has some items, we need to find the end
@@ -213,6 +234,7 @@ void add_ritem (ritemptr *ritem_list_ptr, rptr r) {
         for (i = *ritem_list_ptr; i->next != NULL; i = i->next);
 
         i->next = next;
+	*ritem_last_ptr = next;
     }
 }
 
@@ -283,6 +305,77 @@ void add_snk (snkptr *snk_list_ptr, snkptr snk) {
         for (i = *snk_list_ptr; i->next != NULL; i = i->next);
 
         i->next = snk;
+    }
+}
+
+/* Recursive routine to visit all nodes of a net */
+
+static int nid;
+
+void visit_nodes(
+	nodeptr	curr_node,
+	nodeptr	prev_node,
+	int mode,
+	FILE *outfile
+	) {
+
+    ritemptr curr_ritem;
+
+    switch (mode) {
+	case VISIT_CONN:
+	    if (curr_node->type == SNK) {
+		fprintf(outfile, "*I %s *L %g\n", curr_node->name,
+			curr_node->nodeCap);
+	    }
+	    else if (curr_node->type == SRC) {
+		char *gateend;
+		char *sepptr = strrchr(curr_node->name, '/');
+		if (sepptr != NULL) {
+		    fprintf(outfile, "*P %s ", curr_node->name);
+		    *sepptr = '\0';
+		    gateend = strrchr(curr_node->name, '_');
+		    *sepptr = '/';
+		    if (gateend != NULL) {
+			*gateend = '\0';
+			fprintf(outfile, "*D %s\n", curr_node->name);
+			*gateend = '_';
+		    }
+		}
+	    }
+	    break;
+	case VISIT_CAP:
+	    if (curr_node->type == INT) {
+		nid++;
+		fprintf(outfile, "%d %s %g\n", nid,
+			curr_node->name,
+			curr_node->nodeCap);
+	    }
+	    break;
+    }
+
+    curr_ritem = curr_node->rlist;
+
+    while (curr_ritem != NULL) {
+	switch (mode) {
+	    case VISIT_RES:
+		// NOTE:  Node pairs get visited twice in succession,
+		// so output only once per pair.
+		nid++;
+		if (nid % 2)
+		    fprintf(outfile, "%d %s %s %g\n", nid >> 1,
+				curr_ritem->r->node1->name,
+				curr_ritem->r->node2->name,
+				curr_ritem->r->rval);
+		break;
+	}
+        if ((curr_ritem->r->node1 != prev_node) &&
+			(curr_ritem->r->node1 != curr_node))
+	    visit_nodes(curr_ritem->r->node1, curr_node, mode, outfile);
+        if ((curr_ritem->r->node2 != prev_node) &&
+			(curr_ritem->r->node2 != curr_node))
+	    visit_nodes(curr_ritem->r->node2, curr_node, mode, outfile);
+
+        curr_ritem = curr_ritem->next;
     }
 }
 
@@ -377,6 +470,8 @@ int main (int argc, char* argv[]) {
     Cell *cells, *newcell;
     Pin *newpin;
     char* libfilename;
+    char* design = NULL;
+    char* dotptr = NULL;
 
     nodeptr currnode = NULL;
     rptr    currR    = NULL;
@@ -392,9 +487,11 @@ int main (int argc, char* argv[]) {
     node_item_ptr drivers = NULL;
     node_item_ptr last_driver = NULL;
     int numDrivers = 0;
+    int format = FORMAT_VESTA;
 
     // list of all Rs for debugging and to easily free them at end
     ritemptr allrs = NULL;
+    ritemptr allrs_end = NULL;
 
     elmdly_item_ptr delays = NULL;
 
@@ -434,6 +531,8 @@ int main (int argc, char* argv[]) {
 
             case 'r':
                 rcfile = fopen(optarg, "r");
+		design = strdup(optarg);
+		if ((dotptr = strrchr(design, '.')) != NULL) *dotptr = '\0';
 
                 if (!rcfile) {
                     fprintf(stderr, "ERROR: Unable to open input RC file `%s': %s\n", optarg, strerror(errno));
@@ -458,6 +557,14 @@ int main (int argc, char* argv[]) {
                 if (!outfile) {
                     fprintf(stderr, "ERROR: Unable to open outfile`%s': %s\n", optarg, strerror(errno));
                 }
+		else {
+		    dotptr = strrchr(optarg, '.');
+		    if (dotptr != NULL)
+			if (!strcmp(dotptr, ".spef"))
+			    format = FORMAT_SPEF;
+			else if (!strcmp(dotptr, ".sdf"))
+			    format = FORMAT_SDF;
+		}
                 break;
 
             case 'c':
@@ -515,6 +622,75 @@ int main (int argc, char* argv[]) {
 
     char **tokens;
     int num_toks = 0;
+
+    if (format == FORMAT_SPEF) {
+	char outstr[200];
+	time_t t;
+	struct tm *tmp;
+
+	/* Write SPEF file format output header */
+	t = time(NULL);
+	tmp = localtime(&t);
+	strftime(outstr, 200, "%H:%M:%S %A %B %d, %Y", tmp);
+
+	fprintf(outfile, "*SPEF \"IEEE 1481.1999\"\n");
+	fprintf(outfile, "*DATE \"%s\"\n", outstr);
+	fprintf(outfile, "*DESIGN \"%s\"\n", design);
+	fprintf(outfile, "*VENDOR \"%s\"\n", "unknown");
+	fprintf(outfile, "*PROGRAM \"%s\"\n", "qrouter");
+	fprintf(outfile, "*VERSION \"%s\"\n", "unknown");
+	fprintf(outfile, "*DELIMITER/\n");
+	fprintf(outfile, "*T_UNIT 1 PS\n");
+	fprintf(outfile, "*C_UNIT 1 FF\n");
+	fprintf(outfile, "*R_UNIT 1 OHM\n");
+	fprintf(outfile, "*L_UNIT 1 HENRY\n");
+	fprintf(outfile, "\n");
+	fprintf(outfile, "*PORTS\n");
+
+	/* Parse entire file once to get all port names, which are the	*/
+	/* entries ending with "/PIN".					*/
+
+	while ((bytesRead = getline(&line, &nbytes, rcfile)) > 0) {
+	    if (bytesRead > 2) {
+		tokens = tokenize_line(line, delims, &tokens, &num_toks);
+		for (t = 2; t < num_toks; t++) {
+		    if (!strncmp(tokens[t], "PIN/", 4)) {
+			fprintf(outfile, "*%s %c\n", tokens[t] + 4,
+					(t == 2) ? 'I' : 'O');
+		    }
+		}
+	    }
+	}
+	fprintf(outfile, "\n");
+
+	/* Go back to the beginning of the file */
+        rewind(rcfile);
+    }
+    else if (format == FORMAT_SDF) {
+	char outstr[200];
+	time_t t;
+	struct tm *tmp;
+
+	/* Write SDF file format output header */
+	t = time(NULL);
+	tmp = localtime(&t);
+	strftime(outstr, 200, "%H:%M:%S %A %B %d, %Y", tmp);
+
+	fprintf(outfile, "(DELAYFILE\n");
+	fprintf(outfile, "   (SDFVERSION \"3.0\")\n");
+	fprintf(outfile, "   (DESIGN \"%s\")\n", design);
+	fprintf(outfile, "   (DATE \"%s\")\n", outstr);
+	fprintf(outfile, "   (VENDOR \"%s\")\n", "unknown");
+	fprintf(outfile, "   (PROGRAM \"%s\")\n", "qrouter");
+	fprintf(outfile, "   (VERSION \"%s\")\n", "unknown");
+	fprintf(outfile, "   (DIVIDER /)\n");
+	fprintf(outfile, "   (TIMESCALE 1 ps)\n");
+	fprintf(outfile, "   (CELL\n");
+	fprintf(outfile, "      (CELLTYPE \"%s\")\n", design);
+	fprintf(outfile, "      (INSTANCE \"top\")\n");
+	fprintf(outfile, "      (DELAY\n");
+	fprintf(outfile, "         (ABSOLUTE\n");
+    }
 
     bytesRead = getline(&line, &nbytes, rcfile);
 
@@ -628,9 +804,9 @@ int main (int argc, char* argv[]) {
                     currR->node2 = currnode;
                     currR->rval = atof(tokens[t+1]);
                     // add resistor to each node's resistor list and the global list
-                    add_ritem(&currNodeStack->node->rlist, currR);
-                    add_ritem(&currnode->rlist, currR);
-                    add_ritem(&allrs, currR);
+                    add_ritem(&currNodeStack->node->rlist, currR, &currNodeStack->node->rlist_end);
+                    add_ritem(&currnode->rlist, currR, &currnode->rlist_end);
+                    add_ritem(&allrs, currR, &allrs_end);
 
                     // push the most recent node onto the nodestack
                     add_node_item(&currNodeStack, currnode, &currNodeStack);
@@ -657,6 +833,7 @@ int main (int argc, char* argv[]) {
                     // nothing to do on a comma
                     t += 1;
                 } else {
+		    char *uptr;
                     // located a receiver
                     // Some of the receiver nodes are not endpoints of a branch,
                     // but are branch points themselves. This complicates how
@@ -691,16 +868,29 @@ int main (int argc, char* argv[]) {
                     currR->node2 = currnode;
                     currR->rval = 0;
                     // add resistor to each node's resistor list and the global list
-                    add_ritem(&currNodeStack->node->rlist, currR);
-                    add_ritem(&currnode->rlist, currR);
-                    add_ritem(&allrs, currR);
+                    add_ritem(&currNodeStack->node->rlist, currR, &currNodeStack->node->rlist_end);
+                    add_ritem(&currnode->rlist, currR, &currnode->rlist_end);
+                    add_ritem(&allrs, currR, &allrs_end);
 
                     // Add the receiver contributed capacitance which is either
                     // the input pin capacitance to a std cell or the user-specified
                     // capacitance of a module-level pin
                     char *cellIndex = strsep(&tokens[t], "/");
-                    char *cellName = strsep(&cellIndex, "_");
                     char *pinName = tokens[t];
+                    char *cellName;
+
+		    // (Fixed:  Do not use strsep, as cellname may have underscores
+		    // in the name in addition to the one that delimits the index.)
+		    uptr = strrchr(cellIndex, '_');
+		    if (uptr != NULL) {
+		       *uptr = '\0';
+		       cellName = cellIndex;
+		       cellIndex = uptr + 1;
+		    }
+		    else {
+		       cellName = cellIndex;	/* Should not happen */
+		       cellIndex = NULL;
+		    }
 
                     if (!strcmp(cellName, "PIN")) {
                         currnode->nodeCap = modulePinCapacitance;
@@ -771,41 +961,99 @@ int main (int argc, char* argv[]) {
             currElm->src = last_driver->node;
             add_elmdly_item(&delays, currElm);
 
-            if (verbose > 3) {
-                fprintf(stdout, "INFO: Calculate Elmore Delay for each SNK\n");
-            }
-            calculate_elmore_delay(
-                                    last_driver->node,
-                                    NULL,
-                                    NULL,
-                                    currElm,
-                                    /*NULL,*/
-                                    1,
-                                    0,
-                                    verbose
-                                    );
+	    if (format == FORMAT_VESTA) {
+                if (verbose > 3) {
+                    fprintf(stdout, "INFO: Calculate Elmore Delay for each SNK\n");
+                }
+                calculate_elmore_delay(
+                            last_driver->node,
+                            NULL,
+                            NULL,
+                            currElm,
+                            /* NULL, */
+                            1,
+                            0,
+                            verbose);
 
-            if (verbose > 3) fprintf(stdout, "ELM: %s\t\t%s\t\t%f\n", currElm->name, currElm->src->name, currElm->src->nodeCap + currElm->src->totCapDownstream);
-            fprintf(outfile, "%s\n", currElm->name);
-            fprintf(outfile, "%s %f\n", currElm->src->name, currElm->src->totCapDownstreamLessGates);
+                if (verbose > 3)
+                    fprintf(stdout, "ELM: %s\t\t%s\t\t%f\n", currElm->name,
+				currElm->src->name, currElm->src->nodeCap +
+				currElm->src->totCapDownstream);
+                fprintf(outfile, "%s\n", currElm->name);
+                fprintf(outfile, "%s %f\n", currElm->src->name,
+				currElm->src->totCapDownstreamLessGates);
  
-            currSnk = currElm->snklist;
+                currSnk = currElm->snklist;
  
-            while(currSnk != NULL) {
-                fprintf(outfile, "%s %f\n", currSnk->snknode->name, currSnk->delay);
-                currSnk = currSnk->next;
-            }
+                while(currSnk != NULL) {
+                    fprintf(outfile, "%s %f\n", currSnk->snknode->name, currSnk->delay);
+                    currSnk = currSnk->next;
+                }
  
-            fprintf(outfile, "\n");
+                fprintf(outfile, "\n");
+	    }
+	    else if (format == FORMAT_SPEF) {
+
+		/* Write SPEF file format output */
+		nid = 0;
+		fprintf(outfile, "*D_NET %s %g\n",
+			currElm->name, currElm->src->totCapDownstreamLessGates);
+
+		fprintf(outfile, "*CONN\n");
+		/* Visit drivers and receivers */
+		visit_nodes(last_driver->node, NULL, VISIT_CONN, outfile);
+
+		fprintf(outfile, "*CAP\n");
+		nid = 0;
+		/* Visit nodes of the net and output lumped parasitic caps */
+		visit_nodes(last_driver->node, NULL, VISIT_CAP, outfile);
+
+		fprintf(outfile, "*RES\n");
+		nid = 1;
+		/* Visit nodes of the net and output branch resistances */
+		visit_nodes(last_driver->node, NULL, VISIT_RES, outfile);
+
+	    }
+	    else {		/* (format == FORMAT_SDF) */
+                calculate_elmore_delay(
+                            last_driver->node,
+                            NULL,
+                            NULL,
+                            currElm,
+                            /* NULL, */
+                            1,
+                            0,
+                            verbose);
+
+                currSnk = currElm->snklist;
+ 
+                while(currSnk != NULL) {
+		    fprintf(outfile, "            (INTERCONNECT %s %s %g)\n",
+				currElm->src->name,
+				currSnk->snknode->name,
+				currSnk->delay);
+
+                    currSnk = currSnk->next;
+                }
+	    }
         }
 
         bytesRead = getline(&line, &nbytes, rcfile);
+    }
+
+    if (format == FORMAT_SDF) {
+	/* Close off all those stupid parentheses */
+	fprintf(outfile, "         )\n");
+	fprintf(outfile, "      )\n");
+	fprintf(outfile, "   )\n");
+	fprintf(outfile, ")\n");
     }
 
     fclose(outfile);
     // Cleanup
 
     free(delays);
+    free(design);
 
     ritemptr tmp_ritem = allrs;
     rptr tmp_r = NULL;

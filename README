@@ -4,9 +4,9 @@ Tim Edwards
 Open Circuit Design
 v1.0 April 2013
 v1.1 May   2015
-v1.2 April 2017
+v1.2 May   2018
 ---------------------------------------------------------------
-GPL Copyright (c) 2017
+GPL Copyright (c) 2018
 ---------------------------------------------------------------
 Default technology uses OSU open source digital cell libraries
 See http://vlsiarch.ecen.okstate.edu/flows/
@@ -28,6 +28,7 @@ need to be able to find the following tools:
 	graywolf
 	qrouter
 	magic
+	netgen
 
 All of these tools typically install in a standard location
 that is in the normal user path, such as /usr/local/bin/.

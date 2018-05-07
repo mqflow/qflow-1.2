@@ -130,11 +130,27 @@ if ($dodelays == 1) then
        echo "Converting qrouter output to vesta delay format" |& tee -a ${synthlog}
        echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.dly" \
 		|& tee -a ${synthlog}
-       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} -d ${synthdir}/${rootname}.dly
+       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
+		-d ${synthdir}/${rootname}.dly
+
+       # Run rc2dly again to get SPEF format file
+       echo "Converting qrouter output to SPEF delay format" |& tee -a ${synthlog}
+       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.spef" \
+		|& tee -a ${synthlog}
+       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
+		-d ${synthdir}/${rootname}.spef
+
+       # Run rc2dly again to get SDF format file
+       echo "Converting qrouter output to SDF delay format" |& tee -a ${synthlog}
+       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.sdf" \
+		|& tee -a ${synthlog}
+       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
+		-d ${synthdir}/${rootname}.sdf
 
        cd ${synthdir}
 
-       # Spot check for output file
+       # Spot check for output file (NOTE:  Currently not checking if SPEF
+       # or SDF format files were created)
        if ( !( -f ${rootname}.dly || \
 		( -M ${rootname}.dly < -M ${layoutdir}/${rootname}.rc ))) then
 	  echo "rc2dly failure:  No file ${rootname}.dly created." \

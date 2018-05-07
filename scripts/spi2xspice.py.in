@@ -174,6 +174,16 @@ def write_models(cellsused, celldefs, ofile):
                 print('No output for ' + cellname)
 
 def read_spice(filein, fileout, celldefs, debug, modelfile):
+    global vdd
+
+    vddname = '{:g}'.format(vdd).replace('.', 'v')
+    if not 'v' in vddname:
+        vddname += 'v'
+
+    vddthigh = str(2 * vdd / 3)
+    vddtlow = str(vdd / 3)
+    vddhigh = str(vdd)
+
     # Read a top-level SPICE file with a digital standard cell subcircuit, and
     # write it back out as a subcircuit of XSPICE models and calls with
     # appropriate A-to-D and D-to-A bridges.
@@ -445,9 +455,9 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
                         print("Instance = " + instname + "; inputs = " + intext + "; outputs = " + outtext)
 
                     if len(inlist) == 0:
-                        if cellrec['function'] == '1':
+                        if cellrec['function'][0] == '1':
                             print('A' + instname + ' ' + outtext + ' done', file=ofile)
-                        elif cellrec['function'] == '0':
+                        elif cellrec['function'][0] == '0':
                             print('A' + instname + ' ' + outtext + ' dzero', file=ofile)
                         else:
                             print("Cell " + cellname + " has no inputs and no constant function.")
@@ -496,8 +506,8 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
                     if modelfile != '':
                         print(".include " + modelfile, file=ofile)
                     else:
-                        print(".model todig_3v adc_bridge(in_high=2.0 in_low=1.0 rise_delay=10n fall_delay=10n)", file=ofile)
-                        print(".model toana_3v dac_bridge(out_high=3.0 out_low=0.0)", file=ofile)
+                        print(".model todig_" + vddname + " adc_bridge(in_high=" + vddthigh + " in_low=" + vddtlow + " rise_delay=10n fall_delay=10n)", file=ofile)
+                        print(".model toana_" + vddname + " dac_bridge(out_high=" + vddhigh + " out_low=0)", file=ofile)
                         print("", file=ofile)
 
                         # Write d_dff, d_dlatch, d_pullup, and d_pulldown models
@@ -512,10 +522,10 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
                     for pinname in pindefs:
                         if pindefs[pinname] == 'input':
                             inum += 1
-                            print("AA2D" + str(inum) + " [a_" + pinname + "] [" + pinname + "] todig_3v", file=ofile)
+                            print("AA2D" + str(inum) + " [a_" + pinname + "] [" + pinname + "] todig_" + vddname, file=ofile)
                         elif pindefs[pinname] == 'output':
                             onum += 1
-                            print("AD2A" + str(onum) + " [" + pinname + "] [a_" + pinname + "] toana_3v", file=ofile)
+                            print("AD2A" + str(onum) + " [" + pinname + "] [a_" + pinname + "] toana_" + vddname, file=ofile)
                     print("", file=ofile)
 
                 echoout =  True
@@ -531,6 +541,16 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
         print(".end", file=ofile)
 
 def write_lib(fileout, celldefs, debug):
+    global vdd
+
+    vddname = '{:g}'.format(vdd).replace('.', 'v')
+    if not 'v' in vddname:
+        vddname += 'v'
+
+    vddthigh = str(2 * vdd / 3)
+    vddtlow = str(vdd / 3)
+    vddhigh = str(vdd)
+
     # Write a library file containing the models of all of the cells in the
     # liberty file, which can then be included in other xspice simulatable
     # netlists.
@@ -541,8 +561,8 @@ def write_lib(fileout, celldefs, debug):
         echoout = False
 
         print("", file=ofile)
-        print(".model todig_3v adc_bridge(in_high=2.0 in_low=1.0 rise_delay=10n fall_delay=10n)", file=ofile)
-        print(".model toana_3v dac_bridge(out_high=3.0 out_low=0.0)", file=ofile)
+        print(".model todig_" + vddname + " adc_bridge(in_high=" + vddthigh + " in_low=" + vddtlow + " rise_delay=10n fall_delay=10n)", file=ofile)
+        print(".model toana_" + vddname + " dac_bridge(out_high=" + vddhigh + " out_low=0)", file=ofile)
         print("", file=ofile)
 
         # Write d_dff, d_dlatch, d_pullup, and d_pulldown models
@@ -572,9 +592,13 @@ def parse_pin(function):
     return pstring
 
 def read_liberty(filein, debug):
+    global vdd
+
     celldefs = {}
+    voltrex  = re.compile('[ \t]*nom_voltage[ \t]*:[ \t]*([^;]+);')
     cellrex  = re.compile('[ \t]*cell[ \t]*\(([^)]+)\)')
     pinrex   = re.compile('[ \t]*pin[ \t]*\(([^)]+)\)')
+    busrex   = re.compile('[ \t]*bus[ \t]*\(([^)]+)\)')
     lat1rex  = re.compile('[ \t]*latch[ \t]*\(([^)]+)\)')
     lat2rex  = re.compile('[ \t]*latch[ \t]*\(([^, \t]+)[ \t]*,[ \t]*([^),]+)\)')
     ff1rex   = re.compile('[ \t]*ff[ \t]*\(([^)]+)\)')
@@ -592,6 +616,13 @@ def read_liberty(filein, debug):
         if debug:
             print("Reading liberty file, " + str(len(lines)) + " lines.")
         for line in lines:
+            vmatch = voltrex.match(line)
+            if vmatch:
+                vdd = float(vmatch.group(1))
+                if debug:
+                   print("Nominal process voltage is " + str(vdd))
+                continue
+
             lmatch = cellrex.match(line)
             if lmatch:
                 cellname = lmatch.group(1)
@@ -617,6 +648,15 @@ def read_liberty(filein, debug):
                 pinname = pmatch.group(1)
                 if debug:
                     print("Found input pin " + pinname)
+                cellrec['inputs'].append(pinname)
+                cellrec['nin'] += 1
+                continue
+
+            bmatch = busrex.match(line)
+            if bmatch:
+                pinname = bmatch.group(1)
+                if debug:
+                    print("Found input bus " + pinname)
                 cellrec['inputs'].append(pinname)
                 cellrec['nin'] += 1
                 continue
@@ -737,11 +777,14 @@ if __name__ == '__main__':
     else:
         debug = False
 
+    vdd = 3.0
+    celldefs = {}
     if len(arguments) >= 3:
         print("Reading liberty netlist " + arguments[0])
         print("Reading spice netlist " + arguments[1])
         print("Writing xspice netlist " + arguments[2])
-        celldefs = read_liberty(arguments[0], debug)
+        for libfile in arguments[0].split():
+            celldefs.update(read_liberty(libfile, debug))
         if len(arguments) >= 4:
             modelfile = arguments[3]
         else:
@@ -752,7 +795,8 @@ if __name__ == '__main__':
         # Library-only option
         print("Reading liberty netlist " + arguments[0])
         print("Writing xspice model library " + arguments[1])
-        celldefs = read_liberty(arguments[0], debug)
+        for libfile in arguments[0].split():
+            celldefs.update(read_liberty(libfile, debug))
         write_lib(arguments[1], celldefs, debug)
         print("Done.")
     else:
