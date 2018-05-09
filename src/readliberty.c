@@ -978,10 +978,22 @@ read_liberty(char *libfile, char *pattern)
 		    token = advancetoken(flib, 0);	// Colon
 		    token = advancetoken(flib, ';');
 		    if (!strcasecmp(token, "input")) {
-			newpin->type = PIN_INPUT;
+			if (newpin->type != PIN_CLOCK)
+			   newpin->type = PIN_INPUT;
 		    }
 		    else if (!strcasecmp(token, "output")) {
 			newpin->type = PIN_OUTPUT;
+		    }
+		}
+		else if (!strcasecmp(token, "clock")) {
+		    token = advancetoken(flib, 0);	// Colon
+		    token = advancetoken(flib, ';');
+		    if (!strcasecmp(token, "true")) {
+			if (newpin->type == PIN_INPUT || newpin->type == PIN_UNKNOWN)
+			   newpin->type = PIN_CLOCK;
+			else {
+			   fprintf(stderr, "Warning: Output pin defined as clock.\n");
+			}
 		    }
 		}
 		else if (!strcasecmp(token, "max_transition")) {
@@ -1307,7 +1319,7 @@ get_pincap(Cell *curcell, char *pinname, double *retcap)
 
     for (curpin = curcell->pins; curpin; curpin = curpin->next) {
 	if (!strcmp(curpin->name, pinname)) {
-	    if (curpin->type == PIN_INPUT) {
+	    if (curpin->type == PIN_INPUT || curpin->type == PIN_CLOCK) {
 		*retcap = curpin->cap;
 		return 0;
 	    }

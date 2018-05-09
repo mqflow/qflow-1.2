@@ -42,6 +42,10 @@
  *	figured out a way to do this in one stage instead of two, using
  *	the swap_group capability of the graywolf placement tool to find
  *	the optimal groupings.
+ *
+ * Update 5/7/2018:
+ *	Separated clock buffers from other buffers.  Identify clock inputs
+ *	on flops and latches and trace back to a common clock pin or pins.
  *---------------------------------------------------------------------------
  *
  * Revision 1.3  2008/09/09 21:24:30  steve_beccue
@@ -71,8 +75,11 @@
 char *Inputfname;
 char *Outputfname;
 char *Buffername = NULL;
+char *Clkbufname = NULL;
 char *buf_in_pin = NULL;
+char *clkbuf_in_pin = NULL;
 char *buf_out_pin = NULL;
+char *clkbuf_out_pin = NULL;
 char *Gatepath = NULL;
 char *Ignorepath = NULL;
 char *Separator = NULL;
@@ -123,6 +130,7 @@ struct Nodelist {
    struct Gatelist *outputgate;
    double outputgatestrength;
    int    type;
+   int    clock;
    int    num_inputs;
    double total_load;
    double ratio;                // drive strength to total_load ratio
@@ -149,9 +157,9 @@ struct Baselist {
 
 struct hashlist *Basehash[OBJHASHSIZE];
 
-enum states_ {NONE, INPUTS, OUTPUTS, GATENAME, PINNAME, INPUTNODE, OUTPUTNODE,
-	ENDMODEL, ERROR};
-enum nodetype_ {UNKNOWN, INPUT, OUTPUT, INPUTPIN, OUTPUTPIN};
+enum states_ {NONE, INPUTS, OUTPUTS, GATENAME, PINNAME, INPUTNODE, CLOCKNODE,
+	OUTPUTNODE, ENDMODEL, ERROR};
+enum nodetype_ {UNKNOWN, INPUT, CLOCK, OUTPUT, INPUTPIN, OUTPUTPIN};
 
 int read_gate_file(char *gate_file_name);
 void read_ignore_file(char *ignore_file_name);
@@ -246,7 +254,7 @@ int main (int argc, char *argv[])
    char *pinname;
    char *libfile;
    char *test;
-   char *s, *t;
+   char *s, *t, *comptr;
    FILE *infptr, *outfptr;
    char line[MAXLINE];
    struct Gatelist *gl = NULL;
@@ -269,13 +277,27 @@ int main (int argc, char *argv[])
    while ((i = getopt(argc, argv, "fLgnhvl:c:b:i:o:p:s:I:F:")) != EOF) {
       switch (i) {
 	 case 'b':
+	    /* If value is a comma-separated pair, the first is a	*/
+	    /* general purpose buffer and the second is a clock buffer.	*/
 	    Buffername = strdup(optarg);
+	    if ((comptr = strchr(Buffername, ',')) != NULL) {
+	       *comptr = '\0';
+	       Clkbufname = comptr + 1;
+	    }
 	    break;
 	 case 'i':
 	    buf_in_pin = strdup(optarg);
+	    if ((comptr = strchr(buf_in_pin, ',')) != NULL) {
+	       *comptr = '\0';
+	       clkbuf_in_pin = comptr + 1;
+	    }
 	    break;
 	 case 'o':
 	    buf_out_pin = strdup(optarg);
+	    if ((comptr = strchr(buf_out_pin, ',')) != NULL) {
+	       *comptr = '\0';
+	       clkbuf_out_pin = comptr + 1;
+	    }
 	    break;
          case 'p':
 	    /* Allow multiple files to be specified as space-separated	*/
@@ -327,6 +349,17 @@ int main (int argc, char *argv[])
          default:
 	    break;
       }
+   }
+
+   /* If there is only one set of in and out pins, then assume	*/
+   /* that the pin names apply to both regular and clock	*/
+   /* buffer types.						*/
+
+   if (clkbuf_in_pin == NULL) {
+      clkbuf_in_pin = buf_in_pin;
+   }
+   if (clkbuf_out_pin == NULL) {
+      clkbuf_out_pin = buf_out_pin;
    }
 
    Inputfname = Outputfname = NULL;
@@ -461,6 +494,9 @@ int main (int argc, char *argv[])
       }
    }
 
+   /* If Clkbufname is not defined, make it the same as Buffername */
+   if (Clkbufname == NULL) Clkbufname = Buffername;
+
    pinname = (char *)malloc(1);
    state = NONE;
    while ((s = fgets(line, MAXLINE, infptr)) != NULL) {
@@ -510,6 +546,8 @@ int main (int argc, char *argv[])
 		      state = OUTPUTNODE;
 		   else if (cur_pintype == PIN_INPUT)
 		      state = INPUTNODE;
+		   else if (cur_pintype == PIN_CLOCK)
+		      state = CLOCKNODE;
 		   else
 		      state = ERROR;	// Probably want error handling here. . .
 	       }
@@ -518,6 +556,12 @@ int main (int argc, char *argv[])
 	    case INPUTNODE:
 	       if (VerboseFlag) printf("\nInput node %s", t);
 	       registernode(t, INPUT, gl, pinname);
+	       state = PINNAME;
+	       break;
+
+	    case CLOCKNODE:
+	       if (VerboseFlag) printf("\nClock node %s", t);
+	       registernode(t, CLOCK, gl, pinname);
 	       state = PINNAME;
 	       break;
 
@@ -743,7 +787,7 @@ int read_gate_file(char *gate_file_name)
 
 	gl->num_inputs = 0;
 	for (curpin = curcell->pins; curpin; curpin = curpin->next)
-	    if (curpin->type == PIN_INPUT)
+	    if (curpin->type == PIN_INPUT || curpin->type == PIN_CLOCK)
 		gl->num_inputs++;
 
 	/* The "MaxLatency" is empirically derived.  Since gl->delay	*/
@@ -847,6 +891,7 @@ struct Nodelist* NodelistAlloc()
    nl->num_inputs = 0;
    nl->num_buf = 0;		// Tree expansion of node
    nl->curcount = 0;
+   nl->clock = FALSE;
    return nl;
 }
 
@@ -887,7 +932,7 @@ void showgatelist(void)
      
       curcell = gl->gatecell;
       for (curpin = curcell->pins; curpin; curpin = curpin->next) {
-	 if (curpin->type == INPUT) {
+	 if (curpin->type == INPUT || curpin->type == CLOCK) {
 	    get_pincap(curcell, curpin->name, &pincap);
 	    printf("%g   ", pincap);
  	 }
@@ -924,13 +969,14 @@ void registernode(char *nodename, int type, struct Gatelist *gl, char *pinname)
 	 count_gatetype(gl, 1, 1);
       }
    }
-   else if (type == INPUT) {
+   else if (type == INPUT || type == CLOCK) {
       if (gl != NULL) {
 	 get_pincap(gl->gatecell, pinname, &pincap);
 	 nl->total_load += pincap;
 	 nl->num_inputs++;
       }
    }
+   if (type == CLOCK) nl->clock = TRUE;
 
    if ((nl->type != OUTPUTPIN) && (gl == NULL)) {
       fprintf(stderr, "\nError: no output gate for net %s\n", nodename);
@@ -1079,7 +1125,13 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 			      hier++;
 			   }
 			}
-			fprintf(outfptr, ".gate %s %s=%s %s=%s\n",
+			if (nl->clock == TRUE)
+			   fprintf(outfptr, ".gate %s %s=%s %s=%s\n",
+					Clkbufname, clkbuf_in_pin,
+					nl->nodename, clkbuf_out_pin,
+					nodename);
+			else
+			   fprintf(outfptr, ".gate %s %s=%s %s=%s\n",
 					Buffername, buf_in_pin,
 					nl->nodename, buf_out_pin,
 					nodename);
@@ -1117,12 +1169,16 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 		     state = INPUTNODE;
 		     pincount++;
 		  }
+		  else if (cur_pintype == PIN_CLOCK) {
+		     state = CLOCKNODE;
+		     pincount++;
+		  }
 		  else
 		     state = ERROR;	// Probably want error handling here. . .
 	       }
 	       break;
 
-	    case INPUTNODE:
+	    case INPUTNODE: case CLOCKNODE:
 	       if (VerboseFlag) printf("\nInput node %s", t);
 	       nl = (struct Nodelist *)HashLookup(t, Nodehash);
 	       if (nl->num_buf > 0) {

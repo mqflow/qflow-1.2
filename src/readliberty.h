@@ -12,10 +12,11 @@
 #define PINDEF		3
 #define TIMING		4
 
-// Pin types
+// Pin types (a clock is also an input)
 #define	PIN_UNKNOWN	-1
 #define PIN_INPUT	0
-#define PIN_OUTPUT	1
+#define PIN_CLOCK	1
+#define PIN_OUTPUT	2
 
 // Function translation
 #define GROUPBEGIN	1

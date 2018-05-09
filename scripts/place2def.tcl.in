@@ -16,6 +16,8 @@
 # incorporating extra fill space that GrayWolf cannot optimize out.
 # It is then the responsibility of place2def.tcl to split the cell back
 # into the original cell plus the filler cell in front.
+#
+# Modified 5/8/2018 for modified syntax on aggregate cells + fill
 #---------------------------------------------------------------------------
 
 if {$argc < 2} {
@@ -475,6 +477,7 @@ close $fobs
 # Pass number 1:  Read the .pl1 file and get the number of components and pins
 #-----------------------------------------------------------------
 
+set numfill 0
 set numpins 0
 set numcomps 0
 while {[gets $fpl1 line] >= 0} {
@@ -483,17 +486,19 @@ while {[gets $fpl1 line] >= 0} {
    if {[string equal -length 6 $instance twpin_]} {
       incr numpins
    } else {
-      incr numcomps
-      if [regexp {^[ \t]*[^ \t.]+\.([^ \t.]+)\.[^ \t.]+[ \t]+} $line lmatch fsize] {
-	 if [regexp {[0-9]+X([0-9]+)} $fsize lmatch fmult] {
-	    incr numcomps $fmult
-	 } else {
-	    incr numcomps
-	 }
+      while {[regexp {[^ \t.]+\.[0-9]+\.([^ \t]+)} $instance lmatch rest] == 1} {
+	 incr numcomps
+	 incr numfill
+         set instance $rest
       }
+      incr numcomps
    }
 }
 close $fpl1
+
+puts stdout "Summary: Total components = ${numcomps}"
+puts stdout "  Fill cells  = ${numfill}"
+puts stdout "  Other cells = [expr {${numcomps} - ${numfill}}]"
 
 # The .pl1 file always has components first, then pins
 
@@ -608,33 +613,31 @@ while {[gets $fpl1 line] >= 0} {
 	 set cellname ${fill_cell}
       } else {
 
-	 # Pull out the fill cell if one was spliced into
+	 # Pull out the fill cells if one or more was spliced into
 	 # the component name
-	 if [regexp {([^ \t.]+)\.([^ \t.]+)\.([^ \t.]+)} $instance \
-			lmatch fillcell fillwidth baseinst] {
-	    if {![regexp {([0-9]+)X([0-9]+)} $fillwidth lmatch fillnom fmult]} {
-	       set fillnom $fillwidth
-	       set fmult 1
-	    }
-	    set cellname $fillcell
-	    set instance $baseinst
-	    set fillname $cellname
+
+	 if {[regexp {([^ \t]+)\.([^ \t.]+)} $instance lmatch rest baseinst] != 1} {
+	    set baseinst $instance
+         }
+	 set rest $instance
+
+         set i 0
+	 while {[regexp {([^ \t.]+)\.([0-9]+)\.([^ \t]+)} $rest \
+			lmatch fillcell fillwidth rest] == 1} {
+
 	    set llyoff [expr $lly - $cellybot]
+	    set llxoff [expr $llx - $cellxbot]
 
-	    for {set i 0} {$i < $fmult} {incr i} {
-
-	       set llxoff [expr $llx - $cellxbot]
-
-	       set outllxoff [expr int($llxoff * $multiplier)]
-	       set outllyoff [expr int($llyoff * $multiplier)]
-	       puts $fdef "- ${fillname}_$baseinst $cellname + PLACED ( $outllxoff $outllyoff ) $ostr ;"
-	       incr numcomps -1
-	       set llx [expr $llx + $fillnom]
-	       set fillname "${cellname}$i"
-	    }
+	    set outllxoff [expr int($llxoff * $multiplier)]
+	    set outllyoff [expr int($llyoff * $multiplier)]
+	    incr numcomps -1
+	    puts $fdef "- ${fillcell}_${i}_$baseinst $fillcell + PLACED ( $outllxoff $outllyoff ) $ostr ;"
+	    set llx [expr $llx + $fillwidth]
+	    incr i
 	 }
 
          # Get cellname from instance name.
+	 set instance $rest
          regsub {(.+)_[\d]+$} $instance {\1} cellname
       }
 
@@ -723,9 +726,8 @@ while {[gets $fpin line] >= 0} {
    # Rip the filler cell name off the beginning of instances where
    # they were spliced in
 
-   if [regexp {([^ \t.]+)\.([^ \t.]+)\.([^ \t.]+)} $instance \
-			lmatch fillcell fillwidth baseinst] {
-      set instance $baseinst
+   while {[regexp {[^ \t.]+\.[0-9]+\.([^ \t]+)} $instance lmatch rest] == 1} {
+      set instance $rest
    }
 
    if {([string first twfeed ${instance}] == -1) &&

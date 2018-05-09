@@ -614,10 +614,26 @@ else
       else
 	 set sepoption="-s ${separator}"
       endif
-      if ("x${bufcell}" == "x") then
-	 set bufoption=""
+      if ($?clkbufcell) then
+	 if ("x${clkbufcell}" == "x") then
+	    if ("x${bufcell}" == "x") then
+	       set bufoption=""
+	    else
+	       set bufoption="-b ${bufcell} -i ${bufpin_in} -o ${bufpin_out}"
+	    endif
+	 else
+	    if ("x${bufcell}" == "x") then
+	       set bufoption="-b ${clkbufcell} -i ${bufpin_in} -o ${bufpin_out}"
+	    else
+	       set bufoption="-b ${bufcell},${clkbufcell} -i ${bufpin_in},${clkbufpin_in} -o ${bufpin_out},${clkbufpin_out}"
+	    endif
+	 endif
       else
-	 set bufoption="-b ${bufcell} -i ${bufpin_in} -o ${bufpin_out}"
+	 if ("x${bufcell}" == "x") then
+	    set bufoption=""
+	 else
+	    set bufoption="-b ${bufcell} -i ${bufpin_in} -o ${bufpin_out}"
+	 endif
       endif
 
       # Add paths to liberty files for any hard macros

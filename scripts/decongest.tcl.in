@@ -1,14 +1,14 @@
 #!TCLSH_PATH
 #
 # Usage:
-#	decongest.tcl <rootname> <leffile> <fillcell> [<scale> <offset>]
+#	decongest.tcl <rootname> <leffile> <fillcells> [<scale> <offset>]
 #
 # Take information produced by qrouter's "congested" command,
 # and use it to add fill-cell padding to the most congested
 # instances in the .cel file. 
 #
 # or
-#	decongest.tcl <rootname> <leffile> <fillcell> <density>
+#	decongest.tcl <rootname> <leffile> <fillcells> <density>
 #
 # Take the existing <rootname>.cel file for graywolf input,
 # and pad the area out with randomly-assigned fill cells
@@ -23,6 +23,10 @@
 # to include the width of one or more filler cells.  By
 # annotating the cell instance name, it becomes easy to
 # add the fill cells into the DEF file after placement.
+#
+# "fillcells" is either a single name for a fill cell, or a
+# comma-separated list of three fill cells (of which one or two may
+# be empty strings) for plain fill, decap fill, and antenna fill.
 #
 # "scale" gives a scalefactor which is the amount of
 # increase in congestion that will cause an additional fill
@@ -64,7 +68,8 @@ set celfile ${cellname}.cel
 set annofile ${cellname}.acel
 set cinfofile ${cellname}.cinfo
 set lefname [lindex $argv 1]
-set fillcell [lindex $argv 2]
+set filltypes [split [lindex $argv 2] ,]
+set fillratios {}
 
 if {$argc == 4} {
    set density [lindex $argv 3]
@@ -94,6 +99,66 @@ if {$scale > 0.0} {
 if [catch {open $annofile w} fanno] {
    puts stderr "Error: can't open file $annofile for output"
    return
+}
+
+#----------------------------------------------------------------
+# Check filltypes and determine how many are requested.  This
+# code is complicated mostly to allow flexibility in the way
+# fill cells and their respective percentages are specified.
+#----------------------------------------------------------------
+
+if {[llength $filltypes] > 3} {
+   puts stderr "Can only handle up to three fill cell types.  Ignoring the rest."
+   set filltypes [lrange $filltypes 0 2]
+} elseif {$filltypes == {}} {
+   puts stderr "Warning:  No fill cell types specified."
+}
+
+if {$fillratios == {}} {
+   if {[llength $filltypes] == 1} {
+      set fillratios {100 0 0}
+      lappend filltypes ""
+      lappend filltypes ""
+   } elseif {[llength $filltypes] == 2} {
+      set fillratios {50 50 0}
+      lappend filltypes ""
+   } else {
+      set fillratios {34 33 33}
+   }
+}
+
+if {[llength $filltypes] == 3} {
+   if {[llength $fillratios] > 3} {
+      puts stderr "Error:  Too many fill ratios.  Ignoring all but the first three."
+      set fillratios [lrange $fillratios 0 2]
+   }
+
+   if {[llength $fillratios] == 3} {
+      set addr [expr {[lindex $fillratios 0] + [lindex $fillratios 1] + [lindex $fillratios 2]}]
+      if {$addr > 100} {
+         puts stderr "Error:  Fill ratios sum to greater than 100 percent."
+         set fillratios [lrange $fillratios 0 1]
+      }
+   }
+
+   if {[llength $fillratios] == 2} {
+      set addr [expr {[lindex $fillratios 0] + [lindex $fillratios 1]}]
+      if {$addr > 100} {
+         puts stderr "Error:  First two fill ratios sum to greater than 100 percent."
+         set fillratios [lindex $fillratios 0]
+      } else {
+         lappend fillratios [expr {100 - [lindex $fillratios 0] - [lindex $fillratios 1]}]
+         lappend fillratios [expr {100 - $addr}]
+      }
+   }
+
+   if {[llength $fillratios] == 1} {
+      puts stderr "Error:  Only one fill ratio.  Evenly splitting the remainder."
+      set remain [expr {int((100 - [lindex $fillratios 0]) / 2)}]
+      lappend fillratios $remain
+      set addr [expr {[lindex $fillratios 0] + [lindex $fillratios 1]}]
+      lappend fillratios [expr {100 - $addr}]
+   }
 }
 
 #----------------------------------------------------------------
@@ -152,18 +217,30 @@ proc parse_macro {leffile macroname} {
 # Read the lef macro file and get the fill cells and their widths
 #-----------------------------------------------------------------
 
-puts stdout "Reading ${fillcell} macros from LEF file."
+puts stdout "Reading ${filltypes} macros from LEF file."
 flush stdout
 
 set fillcells {}
+set decapcells {}
+set antennacells {}
+
+set fillcell [lindex $filltypes 0]
+set decapcell [lindex $filltypes 1]
+set antennacell [lindex $filltypes 2]
 
 while {[gets $flef line] >= 0} {
    if [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
       # Parse the "macro" statement
       parse_macro $flef $macroname
       if {[string first $fillcell $macroname] == 0} {
-	 # Remember this for later if it's a fill cell
+	 # Remember this for later if it's a plain fill cell
 	 lappend fillcells $macroname
+      } elseif {[string first $decapcell $macroname] == 0} {
+	 # Remember this for later if it's a decap fill cell
+	 lappend decapcells $macroname
+      } elseif {[string first $antennacell $macroname] == 0} {
+	 # Remember this for later if it's a antenna fill cell
+	 lappend antennacells $macroname
       }
    } elseif [regexp {[ \t]*LAYER[ \t]+([^ \t]+)} $line lmatch layername] {
       skip_section $flef $layername
@@ -209,14 +286,31 @@ while {[gets $flef line] >= 0} {
 # If the macro file doesn't define any fill cells, there's not a
 # whole lot we can do. . .
 
-if {[llength $fillcells] == 0} {
-   puts stdout "No fill cells (${fillname}) found in macro file ${lefname}!"
+set totalfills [expr {[llength $fillcells] + [llength $decapcells] + \
+	[llength $antennacells]}]
+set usedfills [expr {[llength $fillcells] * [lindex $fillratios 0] + \
+	[llength $decapcells] * [lindex $fillratios 1] + \
+	[llength $antennacells] * [lindex $fillratios 2]}]
+
+if {$totalfills == 0} {
+   puts stdout "No fill cells (${fillcell}, ${decapcell}, ${antennacell}) found in macro file ${lefname}!"
+   close $flef
+   exit 1
+}
+if {$usedfills == 0} {
+   puts stdout "No fill cells in macro file ${lefname} are being used!"
+   foundcells = {}
+   if {[llength $fillcells] > 0} {lappend foundcells $fillcell}
+   if {[llength $decapcells] > 0} {lappend foundcells $decapcell}
+   if {[llength $antennacells] > 0} {lappend foundcells $antennacell}
+   puts stdout "Fill cells found are: $foundcells"
+   close $flef
    exit 1
 }
 
 close $flef
 
-# Sort array of fill cells by width
+# Sort each array of fill cells by width
 
 set fillwidths {}
 foreach macro $fillcells {
@@ -226,6 +320,24 @@ set fillwidths [lsort -decreasing -index 1 -real $fillwidths]
 set fillinfo [lindex $fillwidths 0]
 set fillmacro [lindex $fillinfo 0]
 set fillvalue [lindex $fillinfo 1]
+
+set decapwidths {}
+foreach macro $decapcells {
+   lappend decapwidths [list $macro [subst \$${macro}(w)]]
+}
+set decapwidths [lsort -decreasing -index 1 -real $decapwidths]
+set decapinfo [lindex $decapwidths 0]
+set decapmacro [lindex $decapinfo 0]
+set decapvalue [lindex $decapinfo 1]
+
+set antennawidths {}
+foreach macro $antennacells {
+   lappend antennawidths [list $macro [subst \$${macro}(w)]]
+}
+set antennawidths [lsort -decreasing -index 1 -real $antennawidths]
+set antennainfo [lindex $antennawidths 0]
+set antennamacro [lindex $antennainfo 0]
+set antennavalue [lindex $antennainfo 1]
 
 #------------------------------------------------------------------------
 # Now read the contents of the cinfo file so that we have a list of the
@@ -281,12 +393,13 @@ if {$scale > 0.0} {
    # Read .cel file to get a list of all instances.  Record the total width
    # of all cells.  Determine how many fill cells need to be added to
    # reduce the density of actively routed cells to the specified amount.
-   # Randomly assign fill cells until the density requirement is met.
+   # Assign fill cells until the density requirement is met.  Use a sigma-
+   # delta type approach to assigning cells to maintain close to the right
+   # ratio of widths for each fill type.
    #------------------------------------------------------------------------
 
    set totalwidth 0
    set instlist {}
-   set filllist {}
    while {[gets $fcel line] >= 0} {
       if [regexp {[ \t]*cell[ \t]*([0-9]+)[ \t]+([^ \t]+)} $line \
 		lmatch instnum instname] {
@@ -298,50 +411,29 @@ if {$scale > 0.0} {
       }
    }
 
-   set filltotal [expr {$totalwidth * ((1.0 / $density) - 1.0)}]
-   set numfills [expr {int($filltotal / $fillvalue + 0.5)}]
+   # alltotal is the total width of fill needed to achieve the specified
+   # density.
+
+   set alltotal [expr {$totalwidth * ((1.0 / $density) - 1.0)}]
+
+   # calculate the total width of each type of fill cell to be added
+   # to make up the total required fill.
+
+   set filltotal [expr {int($alltotal * [lindex $fillratios 0] / 100)}]
+   set decaptotal [expr {int($alltotal * [lindex $fillratios 1] / 100)}]
+   set antennatotal [expr {int($alltotal - ($filltotal + $decaptotal))}]
+
    set numcells [llength $instlist]
-   set basefills 0
-
-   # If there are multiple entries in the fill cell list, choose
-   # a width such that the number of fill cells and number of
-   # standard cells is more or less the same, preferably with
-   # more fill cells than standard cells.  Distribute the
-   # fill cells among the standard cells.
-
-   if {($numfills < $numcells) && ([llength $fillwidths] > 1)} {
-      foreach fillinfo $fillwidths {
-	 set fillmacro [lindex $fillinfo 0]
-	 set fillvalue [lindex $fillinfo 1]
-	 set numfills [expr {int($filltotal / $fillvalue + 0.5)}]
-	 set numcells [llength $instlist]
-	 if {$numfills > $numcells} {break}
-      }
-   }
 
    # Diagnostic information
    puts stdout ""
    puts stdout "decongest.tcl:"
    puts stdout "Fixed density planning, density = $density"
    puts stdout "Number of cells = $numcells, total width = $totalwidth"
-   puts stdout "Width of fill = $fillvalue, total fill cells added = $numfills"
+   puts stdout "Width of fill = $filltotal"
+   puts stdout "Width of decap = $decaptotal"
+   puts stdout "Width of antenna  = $antennatotal"
    puts stdout ""
-
-   if {$numfills > $numcells} {
-      while {$numfills > $numcells} {
-         incr basefills
-         set numfills [expr {$numfills - $numcells}]
-      }
-      set numfills [expr {$numcells - $numfills}]
-   }
-   incr basefills 1
-   for {set i 0} {$i < $numfills} {incr i} {
-      lappend filllist $basefills
-   }
-   incr basefills -1
-   for {} {$i < $numcells} {incr i} {
-      lappend filllist $basefills
-   }
 
    # Rewind the cel file for the next step
    seek $fcel 0 start
@@ -352,40 +444,121 @@ if {$scale > 0.0} {
 # in the "instlist" list of cells, annotate the next line to increase
 # the width by an amount equal to the width of a fill cell.
 #
-# To do:  Use different fill cell widths according to congestion amount;
-# or use multiple fill cells (if different widths are not available).
+# Sigma delta approach:  Keep running total of the widths of all cells
+# of each fill type used and a running total of the width of all cells
+# in the design parsed so far.
+#
+# For each cell in the design:
+# 1. Add the width of the cell to the running total
+# 2. For each fill cell type,
+#    A. Calculate the ratio of total width of the fill cells used so far
+#	to the total width of standard cells parsed so far;
+#    B. Knowing the target ratio of fill cell width to total cell width,
+#	calculate the width of fill needed to add to reach that ratio.
+#    C. Find the largest available fill cell width that does not exceed
+#	the target ratio.
+#    D. If there is such a fill cell, attach it to the standard cell and
+#       add its width to the running total of fill cell width.
+#
+# Values used:
+#    Total standard cell width = totalwidth
+#    Aggregate standard cell width = aggwidth
+#    Target fill cell width = filltotal
+#    Target fill cell ratio = fillratio = (filltotal / totalwidth)
+#    Aggregate fill cell width = fillagg
+#    Target decap cell width = decaptotal
+#    Target decap cell ratio = decapratio = (decaptotal / totalwidth)
+#    Aggregate decap cell width = decapagg
+#    Target antenna cell width = antennatotal
+#    Target antenna cell ratio = antennaratio = (antennatotal / totalwidth)
+#    Aggregate antenna cell width = antennaagg
+# 
 #------------------------------------------------------------------------
 
+set fillratio    [expr {(0.0 + $filltotal) / $totalwidth}]
+set decapratio   [expr {(0.0 + $decaptotal) / $totalwidth}]
+set antennaratio [expr {(0.0 + $antennatotal) / $totalwidth}]
+
+set fillagg 0
+set decapagg 0
+set antennaagg 0
+
+set aggwidth 0
+
 while {[gets $fcel line] >= 0} {
-   if [regexp {[ \t]*pad[\t]*[0-9]+} $line lmatch] {
-      puts $fanno $line	  ;# append the pad line and continue
-   } elseif [regexp {[ \t]*cell[ \t]*([0-9]+)[ \t]+([^ \t]+)} \
+   if [regexp {[ \t]*cell[ \t]*([0-9]+)[ \t]+([^ \t]+)} \
 		$line lmatch instnum instname] {
       set instidx [lsearch $instlist $instname]
-      if {$instidx >= 0} {
-	 set fillnum [lindex $filllist $instidx]
-	 if {$fillnum > 1} {
-	    puts $fanno "cell $instnum ${fillmacro}.${fillvalue}X${fillnum}.${instname}"
-	    set adjust [expr {$fillnum * $fillvalue}]
-	 } elseif {$fillnum == 0} {
-	    puts $fanno "cell $instnum ${instname}"
-	    set adjust 0
-	 } else {
-	    puts $fanno "cell $instnum ${fillmacro}.${fillvalue}.${instname}"
-	    set adjust $fillvalue
-	 }
-         gets $fcel line
-         if [regexp {[ \t]*left[ \t]+([^ \t]+)[ \t]+right[ \t]+([^ \t]+)[ \t]+(.*)} \
-			$line lmatch left right rest] {
-	    set totalwidth [expr {-$left + $right + $adjust}]
-	    set fleft [expr {-($totalwidth / 2)}]
-	    set fright [expr {$fleft + $totalwidth}]
-	    puts $fanno "left $fleft right $fright $rest"
-         } else {
-            puts $fanno $line	;# failed to parse, so ignore it
-         }
+
+      gets $fcel cline
+      if ![regexp {[ \t]*left[ \t]+([^ \t]+)[ \t]+right[ \t]+([^ \t]+)[ \t]+(.*)} \
+			$cline lmatch left right rest] {
+         puts $fanno $line	;# failed to parse, so output unchanged
+         puts $fanno $cline
       } else {
-         puts $fanno $line
+
+         # Calculate aggregate cell width
+	 set cellwidth [expr {$right - $left}]
+         incr aggwidth $cellwidth
+	 if {$instidx < 0} {
+            puts $fanno $line	;# unknown cell, so output unchanged
+            puts $fanno $cline
+         } else {
+	    set needfill [expr {$aggwidth * $fillratio}]
+            set cstr ""
+	    while {$needfill > $fillagg} {
+	       set cwid 0
+	       foreach fillinfo $fillwidths {
+		  set cmac [lindex $fillinfo 0]
+		  set cwid [lindex $fillinfo 1]
+		  if {[expr {$fillagg + $cwid}] < $needfill} {
+		     break
+		  }
+	       }
+	       if {$cwid == 0} {break}
+	       incr fillagg $cwid
+	       incr cellwidth $cwid
+	       set cstr ${cmac}.${cwid}.${cstr}
+	    }
+
+	    set needdecap [expr {$aggwidth * $decapratio}]
+	    while {$needdecap > $decapagg} {
+	       set cwid 0
+	       foreach decapinfo $decapwidths {
+		  set cmac [lindex $decapinfo 0]
+		  set cwid [lindex $decapinfo 1]
+		  if {[expr {$decapagg + $cwid}] < $needdecap} {
+		     break
+		  }
+	       }
+	       if {$cwid == 0} {break}
+	       incr decapagg $cwid
+	       incr cellwidth $cwid
+	       set cstr ${cmac}.${cwid}.${cstr}
+	    }
+
+	    set needantenna [expr {$aggwidth * $antennaratio}]
+	    while {$needantenna > $antennaagg} {
+	       set cwid 0
+	       foreach antennainfo $antennawidths {
+		  set cmac [lindex $antennainfo 0]
+		  set cwid [lindex $antennainfo 1]
+		  if {[expr {$antennaagg + $cwid}] < $needantenna} {
+		     break
+		  }
+	       }
+	       if {$cwid == 0} {break}
+	       incr antennaagg $cwid
+	       incr cellwidth $cwid
+	       set cstr ${cmac}.${cwid}.${cstr}
+	    }
+            
+	    puts $fanno "cell $instnum ${cstr}${instname}"
+
+	    set fleft [expr {-($cellwidth / 2)}]
+	    set fright [expr {$fleft + $cellwidth}]
+	    puts $fanno "left $fleft right $fright $rest"
+	 }
       }
    } else {
       puts $fanno $line

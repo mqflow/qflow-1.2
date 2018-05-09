@@ -185,13 +185,50 @@ endif
 
 cd ${layoutdir}
 
+# Set value ${fillers} to be equal either to a single cell name if
+# only one of (decapcell, antennacell, fillcell) is defined, or a
+# comma-separated triplet.  If only one is defined, then "fillcell"
+# is set to that name for those scripts that only handle one kind of
+# fill cell.
+
+if ( ${?fillcell} && ("x$fillcell" != "x")) then
+   if ( ${?decapcell} && ("x$decapcell" != "x")) then
+      if ( ${?antennacell} && ("x$antennacell" != "x")) then
+	 set fillers = "${fillcell},${decapcell},${antennacell}"
+      else
+	 set fillers = "${fillcell},${decapcell},"
+      endif
+   else if ( ${?antennacell} && ("x$antennacell" != "x")) then
+      set fillers = "${fillcell},,${antennacell}"
+   else
+      set fillers = "${fillcell}"
+   endif
+else
+   if ( ${?decapcell} && ("x$decapcell" != "x")) then
+      if ( ${?antennacell} && ("x$antennacell" != "x")) then
+	 set fillers = ",${decapcell},${antennacell}"
+      else
+	 set fillers = ",${decapcell},"
+      endif
+      set fillcell = ${decapcell}
+   else if ( ${?antennacell} && ("x$antennacell" != "x")) then
+      set fillers = ",,${antennacell}"
+      set fillcell = ${antennacell}
+   else
+      # There is no fill cell, which is likely to produce poor results.
+      echo "Warning:  No fill cell types are defined in the tech setup script."
+      echo "This is likely to produce poor layout and/or poor routing results."
+      set fillcell = ""
+   endif
+endif
+
 if ( ${?initial_density} ) then
    echo "Running decongest to set initial density of ${initial_density}" \
 		|& tee -a ${synthlog}
-   echo "decongest.tcl ${rootname} ${lefpath} ${fillcell} ${initial_density}" \
+   echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density}" \
 		|& tee -a ${synthlog}
    ${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
-		${fillcell} ${initial_density} |& tee -a ${synthlog}
+		${fillers} ${initial_density} |& tee -a ${synthlog}
    set errcond = $status
    if ( ${errcond} != 0 ) then
 	 echo "decongest.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
@@ -383,6 +420,10 @@ if ($makedef == 1) then
    #---------------------------------------------------------------------
 
    if ( !(${?nospacers}) && (-f ${scriptdir}/addspacers.tcl) ) then
+
+      # Fill will use just the fillcell for padding under power buses
+      # and on the edges (to do:  refine this to use other spacer types
+      # if the width options are more flexible).
 
       if ( !( ${?addspacers_options} )) then
          set addspacers_options = ""
