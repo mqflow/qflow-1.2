@@ -40,7 +40,8 @@ else
    echo
    echo			$yosys_options	for yosys
    echo			$yosys_script	for yosys
-   echo			$nobuffers	to bypass ybuffer
+   echo			$nobuffers	to ignore output buffering
+   echo			$inbuffers	to force input buffering
    echo			$fanout_options	for blifFanout
    exit 1
 endif
@@ -408,6 +409,12 @@ if ( ${major} > 0 || ${minor} > 1 ) then
 iopadmap -outpad ${bufcell} ${bufpin_in}:${bufpin_out} -bits
 EOF
    endif
+   if ($?inbuffers) then
+       cat >> ${modulename}.ys << EOF
+# Input buffering
+iopadmap -inpad ${bufcell} ${bufpin_out}:${bufpin_in} -bits
+EOF
+   endif
 endif
 
 cat >> ${modulename}.ys << EOF
@@ -500,11 +507,27 @@ echo set gndnet=\"${gndnet}\" >> ${synthdir}/${modulename}_powerground
 # Run ypostproc syntax post-processor
 #----------------------------------------------------------------------
 
+if (! $?postproc_options) then
+   set postproc_options=""
+else
+   if ( $postproc_options == "-anchors" ) then
+      if ( $?antennacell ) then
+          echo "Running getantennacell to determine cell to use for anchoring." |& tee -a ${synthlog}
+          echo "getantennacell.tcl $modulename ${lefpath} $antennacell" |& tee -a ${synthlog}
+          set anchorinfo=`${scriptdir}/getantennacell.tcl $modulename ${lefpath} $antennacell  | grep antenna= | cut -d= -f2`
+          set postproc_options = "-anchor=$anchorinfo"
+      else
+          echo "Antenna anchoring requested but no antenna cell defined in tech."
+          set postproc_options = ""
+      endif
+   endif
+endif
+
 echo "Cleaning up output syntax" |& tee -a ${synthlog}
-echo "ypostproc.tcl ${modulename}_mapped.blif ${modulename} ${techdir}/${techname}.sh" \
+echo "ypostproc.tcl ${modulename}_mapped.blif ${modulename} ${techdir}/${techname}.sh ${vddnet} ${gndnet} ${postproc_options}" \
 	|& tee -a ${synthlog}
 ${scriptdir}/ypostproc.tcl ${modulename}_mapped.blif ${modulename} \
-		${techdir}/${techname}.sh ${vddnet} ${gndnet}
+		${techdir}/${techname}.sh ${vddnet} ${gndnet} ${postproc_options}
 set errcond = ${status}
 if ( $errcond != 0 ) then
    echo "ypostproc failure.  See file ${synthlog} for error messages." \

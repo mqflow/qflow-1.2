@@ -1237,15 +1237,17 @@ int find_path_delay(int dir, double delay, double trans, connptr receiver,
             newtransf = calc_transition(trans, receiver, FALLING, minmax);
         }
 
-        loadnet = (testinst) ? testinst->out_connects->refnet : receiver->refnet;
-        for (i = 0; i < loadnet->fanout; i++) {
-            if (outdir & RISING)
-                numpaths += find_path_delay(RISING, newdelayr, newtransr,
-                        loadnet->receivers[i], newbtdata, delaylist, minmax);
-            if (outdir & FALLING)
-                numpaths += find_path_delay(FALLING, newdelayf, newtransf,
-                        loadnet->receivers[i], newbtdata, delaylist, minmax);
-        }
+	if (!testinst || testinst->out_connects) {
+	    loadnet = (testinst) ?  testinst->out_connects->refnet : receiver->refnet;
+	    for (i = 0; i < loadnet->fanout; i++) {
+		if (outdir & RISING)
+		    numpaths += find_path_delay(RISING, newdelayr, newtransr,
+				loadnet->receivers[i], newbtdata, delaylist, minmax);
+		if (outdir & FALLING)
+		    numpaths += find_path_delay(FALLING, newdelayf, newtransf,
+				loadnet->receivers[i], newbtdata, delaylist, minmax);
+	    }
+	}
         receiver->tag = NULL;
     }
     else {
@@ -3040,18 +3042,28 @@ computeLoads(netptr netlist, instptr instlist, double out_load)
     // record for the pin.
 
     for (testinst = instlist; testinst; testinst = testinst->next) {
-        loadnet = testinst->out_connects->refnet;
-        for (testconn = testinst->in_connects; testconn; testconn = testconn->next) {
-            testpin = testconn->refpin;
+	double loadr, loadf;
+	if (testinst->out_connects != NULL) {
+	    loadnet = testinst->out_connects->refnet;
+	    loadr = loadnet->loadr;
+	    loadf = loadnet->loadf;
+	}
+	else {
+	    loadr = 0.0;
+	    loadf = 0.0;
+	}
+	     
+	for (testconn = testinst->in_connects; testconn; testconn = testconn->next) {
+	    testpin = testconn->refpin;
 
             if (testpin->propdelr)
-                testconn->prvector = table_collapse(testpin->propdelr, loadnet->loadr);
+                testconn->prvector = table_collapse(testpin->propdelr, loadr);
             if (testpin->propdelf)
-                testconn->pfvector = table_collapse(testpin->propdelf, loadnet->loadf);
+                testconn->pfvector = table_collapse(testpin->propdelf, loadf);
             if (testpin->transr)
-                testconn->trvector = table_collapse(testpin->transr, loadnet->loadr);
+                testconn->trvector = table_collapse(testpin->transr, loadr);
             if (testpin->transf)
-                testconn->tfvector = table_collapse(testpin->transf, loadnet->loadf);
+                testconn->tfvector = table_collapse(testpin->transf, loadf);
         }
     }
 }

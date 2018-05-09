@@ -390,6 +390,18 @@ if ( ! -f ${userfile} ) then
       echo \# set nobuffers = >> ${userfile}
    endif
 
+   if ( ${?inbuffers} ) then
+      echo \# set inbuffers = \"${inbuffers}\" >> ${userfile}
+   else
+      echo \# set inbuffers = >> ${userfile}
+   endif
+
+   if ( ${?postproc_options} ) then
+      echo \# set postproc_options = \"${postproc_options}\" >> ${userfile}
+   else
+      echo \# set postproc_options = >> ${userfile}
+   endif
+
    if ( ${?nofanout} ) then
       echo \# set nofanout = \"${nofanout}\" >> ${userfile}
    else
