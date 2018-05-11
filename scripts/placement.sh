@@ -550,6 +550,9 @@ if ($makedef == 1) then
    # Scripted version continues with the read-in of the DEF file
 
    if (${scripting} == "T") then
+      if ("x$useantennacell" != "x") then
+	 echo "catch {qrouter::antenna init ${useantennacell}}" >> ${rootname}.cfg
+      endif
       echo "read_def ${rootname}.def" >> ${rootname}.cfg
    endif
 
@@ -563,9 +566,6 @@ if ($makedef == 1) then
       cat ${rootname}.cfg2 >> ${rootname}.cfg
    else
       if (${scripting} == "T") then
-         if ("x$useantennacell" != "x") then
-	    echo "catch {qrouter::antenna init ${useantennacell}}" >> ${rootname}.cfg
-	 endif
 	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
 	 echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
 	 # Standard_route's automatic quit has been subverted in order
