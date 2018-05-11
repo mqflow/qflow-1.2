@@ -361,6 +361,16 @@ if ($makedef == 1) then
       exit 1
    endif
 
+   echo "Running getantennacell to determine cell to use for antenna anchors." \
+	|& tee -a ${synthlog}
+   echo "getantennacell.tcl $rootname ${lefpath} $antennacell" |& tee -a ${synthlog}
+   set useantennacell=`${scriptdir}/getantennacell.tcl $rootname \
+	${lefpath} $antennacell  | grep antenna= | cut -d= -f2 | cut -d/ -f1`
+
+   if ( "${useantennacell}" != "" ) then
+      echo "Using cell ${useantennacell} for antenna anchors" |& tee -a ${synthlog}
+   endif
+
    # Run getfillcell to determine which cell should be used for fill to
    # match the width specified for feedthroughs in the .par file.  If
    # nothing is returned by getfillcell, then either feedthroughs have
@@ -554,6 +564,9 @@ if ($makedef == 1) then
    else
       if (${scripting} == "T") then
 	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
+         if ("x$useantennacell" != "x") then
+	    echo "catch {qrouter::antenna ${useantennacell}}" >> ${rootname}.cfg
+	 endif
 	 echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
 	 # Standard_route's automatic quit has been subverted in order
 	 # to write the delay file, so make sure that qrouter actually exits.
