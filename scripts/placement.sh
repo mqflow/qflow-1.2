@@ -563,10 +563,10 @@ if ($makedef == 1) then
       cat ${rootname}.cfg2 >> ${rootname}.cfg
    else
       if (${scripting} == "T") then
-	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
          if ("x$useantennacell" != "x") then
-	    echo "catch {qrouter::antenna ${useantennacell}}" >> ${rootname}.cfg
+	    echo "catch {qrouter::antenna init ${useantennacell}}" >> ${rootname}.cfg
 	 endif
+	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
 	 echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
 	 # Standard_route's automatic quit has been subverted in order
 	 # to write the delay file, so make sure that qrouter actually exits.
