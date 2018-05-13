@@ -51,10 +51,13 @@
 # LEF dimensions are microns unless otherwise stated.
 #------------------------------------------------------------
 
-if {$argc != 3 && $argc != 4 && $argc != 5} {
+if {$argc < 4 || $argc > 7} {
    puts stderr "Bad argument list"
    puts stderr "Usage: decongest.tcl <rootname> <leffile> <fillcell> [<scale> <offset>]"
    puts stderr "or:    decongest.tcl <rootname> <leffile> <fillcell> <density>"
+   puts stderr "or:    decongest.tcl <rootname> <leffile> <fillcells> <density> <ratios>"
+   puts stderr "<fillcell> is a comma-separated list of up to three fill cell types."
+   puts stderr "<ratios> is a space-separated list of ratios for each fill cell type."
    exit 1
 }
 
@@ -77,6 +80,15 @@ if {$argc == 4} {
 } elseif {$argc == 5} {
    set scale [lindex $argv 3]
    set offset [lindex $argv 4]
+} else {
+   # For 6 or 7 arguments.  Note that there is no 5-argument syntax
+   # for ratios, since if only one fill type is specified, then by
+   # definition it must be 100% of the fill.
+
+   set density [lindex $argv 3]
+   for {set i 0} {$i < [expr {$argc - 4}]} {incr i} {
+      lappend fillratios [lindex $argv [expr {$i + 4}]]
+   }
 }
 
 if [catch {open $lefname r} flef] {
@@ -107,21 +119,51 @@ if [catch {open $annofile w} fanno] {
 # fill cells and their respective percentages are specified.
 #----------------------------------------------------------------
 
-if {[llength $filltypes] > 3} {
+# Count fill types by adding all non-empty-string components of $filltypes
+set num_filltypes 0
+foreach filltype $filltypes {
+   if {$filltype != ""} {incr num_filltypes}
+}
+
+if {$num_filltypes > 3} {
    puts stderr "Can only handle up to three fill cell types.  Ignoring the rest."
    set filltypes [lrange $filltypes 0 2]
 } elseif {$filltypes == {}} {
    puts stderr "Warning:  No fill cell types specified."
 }
 
+# If filltypes is truncated, then pad the array.  However, it is
+# much preferable for the caller to supply all three entries,
+# with empty strings for those that don't exist, because the
+# following method does not try to match fill cell names to fill
+# cell types.
+
+if {[llength $filltypes] == 1} {
+      lappend filltypes ""
+      lappend filltypes ""
+} elseif {[llength $filltypes] == 2} {
+      lappend filltypes ""
+}
+
+# Automatically assign fill ratios if ratios were not specified.
+
 if {$fillratios == {}} {
-   if {[llength $filltypes] == 1} {
-      set fillratios {100 0 0}
-      lappend filltypes ""
-      lappend filltypes ""
-   } elseif {[llength $filltypes] == 2} {
-      set fillratios {50 50 0}
-      lappend filltypes ""
+   if {$num_filltypes == 1} {
+      foreach filltype $filltypes {
+	  if {$filltype != ""} {
+	      lappend fillratios 100
+	  } else {
+	      lappend fillratios 0
+	  }
+      }
+   } elseif {$num_filltypes == 2} {
+      foreach filltype $filltypes {
+	  if {$filltype != ""} {
+	      lappend fillratios 50
+	  } else {
+	      lappend fillratios 0
+	  }
+      }
    } else {
       set fillratios {34 33 33}
    }

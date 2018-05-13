@@ -402,6 +402,12 @@ if ( ! -f ${userfile} ) then
       echo \# set postproc_options = >> ${userfile}
    endif
 
+   if ( ${?fill_ratios} ) then
+      echo \# set fill_ratios = \"${fill_ratios}\" >> ${userfile}
+   else
+      echo \# set fill_ratios = >> ${userfile}
+   endif
+
    if ( ${?nofanout} ) then
       echo \# set nofanout = \"${nofanout}\" >> ${userfile}
    else

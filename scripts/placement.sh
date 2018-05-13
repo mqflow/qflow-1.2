@@ -225,10 +225,17 @@ endif
 if ( ${?initial_density} ) then
    echo "Running decongest to set initial density of ${initial_density}" \
 		|& tee -a ${synthlog}
-   echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density}" \
+   if ( ${?fill_ratios} ) then
+        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density} ${fill_ratios}" \
 		|& tee -a ${synthlog}
-   ${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
+	${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
+		${fillers} ${initial_density} ${fill_ratios} |& tee -a ${synthlog}
+   else
+        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density}" \
+		|& tee -a ${synthlog}
+	${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
 		${fillers} ${initial_density} |& tee -a ${synthlog}
+   endif
    set errcond = $status
    if ( ${errcond} != 0 ) then
 	 echo "decongest.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
