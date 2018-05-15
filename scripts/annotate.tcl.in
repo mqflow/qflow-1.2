@@ -1,0 +1,194 @@
+#!TCLSH_PATH
+#---------------------------------------------------------------------------
+# annotate.tcl ---
+#
+# Read a file "antenna.out" produced by qrouter, and use this to
+# back-annotate the <project>.rtlnopwr.v verilog netlist for input
+# to static timing analysis, and the <project>.spc netlist for LVS
+# verification.
+#
+# The "antenna.out" file contains connections made by the router to
+# antenna anchoring cells.  It is solely a product of the routing and
+# should not permanently affect any netlist that becomes input to any
+# stage prior to routing (e.g., the .blif or .cel files used for
+# placement).
+#
+# The output is written to the two filenames specified.  Input and output
+# files are opened at the same time, so do not specify the same file to
+# be overwritten.
+#
+#---------------------------------------------------------------------------
+
+namespace path {::tcl::mathop ::tcl::mathfunc}
+
+if {$argc != 5 && $argc != 6} {
+   puts stdout "Usage:  annotate.tcl <antenna_file> <verilog_file> <spice_file> <verilog_out> <spice_out> [<spice_lib>]"
+   exit 0
+}
+
+puts stdout "Running annotate.tcl"
+
+set antennaname [lindex $argv 0]
+set vlogname [lindex $argv 1]
+set spicename [lindex $argv 2]
+set vlogoutname [lindex $argv 3]
+set spiceoutname [lindex $argv 4]
+
+if {$argc == 6} {
+   set spicelibname [lindex $argv 5]
+} else {
+   set spicelibname ""
+}
+
+#-----------------------------------------------------------------
+# Open antenna file for reading
+#-----------------------------------------------------------------
+
+if [catch {open $antennaname r} fant] {
+   puts stderr "Error: can't open file $antennaname for input"
+   return
+}
+
+#-----------------------------------------------------------------
+# Read the antenna update file.
+#-----------------------------------------------------------------
+
+set added 0
+set changelist {}
+while {[gets $fant line] >= 0} {
+   if [regexp {[ \t]*Unfixed antenna errors:} $line lmatch] {
+      break
+   }
+   if [regexp {[ \t]*Net=([^ \t]+)[ \t]+Instance=([^ \t]+)[ \t]+Cell=([^ \t]+)[ \t]+Pin=([^ \t]+)} $line lmatch netname instname cellname pinname] {
+      incr added
+      set netchange [list $netname $instname $cellname $pinname]
+      lappend changelist $netchange
+   }
+}
+if {$added == 0} {
+   puts stdout "No nets needed annotating."
+   return
+}
+
+close $fant	;# Done with antenna input file
+
+#-----------------------------------------------------------------
+# Open verilog files for reading and writing
+#-----------------------------------------------------------------
+
+if [catch {open $vlogname r} fvlog] {
+   puts stderr "Error: can't open file $defname for input"
+   return
+}
+
+if [catch {open $vlogoutname w} fvout] {
+   puts stderr "Error: can't open file $vlogoutname for output"
+   return
+}
+
+while {[gets $fvlog line] >= 0} {
+   if [regexp {[ \t]*endmodule} $line lmatch] {
+      # Insert the list here
+      foreach netchange $changelist {
+	 set netname [lindex $netchange 0]
+	 set instname [lindex $netchange 1]
+	 set cellname [lindex $netchange 2]
+	 set pinname [lindex $netchange 3]
+	 puts $fvout "${cellname} ${instname} ( .${pinname}(${netname}) );"
+      }
+   }
+   puts $fvout $line
+}
+
+close $fvlog
+close $fvout
+
+#-----------------------------------------------------------------
+# Open spice files for reading and writing
+#-----------------------------------------------------------------
+
+if [catch {open $spicename r} fspi] {
+   puts stderr "Error: can't open file $spicename for input"
+   return
+}
+
+if {$spicelibname != ""} {
+   if [catch {open $spicelibname r} fslib] {
+      puts stderr "Error: can't open file $spicelibname for input"
+      return
+   }
+}
+
+if [catch {open $spiceoutname w} fsout] {
+   puts stderr "Error: can't open file $spiceoutname for output"
+   return
+}
+
+# Compile the list of antenna cells used (possibly there is only one)
+# Keep a pair of cell name and input pin name.
+set antlist {}
+foreach netchange $changelist {
+    lappend antlist [list [lindex $netchange 2] [lindex $netchange 3]]
+}
+set antlist [lsort -uniq -index 0 $antlist]
+
+# Make a list of just the cells for use with lsearch.
+set antcells {}
+foreach pair $antlist {
+   lappend antcells [lindex $pair 0]
+}
+
+# Read SPICE library to find the ".subckt" line for the antenna cell.
+
+while {[gets $fslib line] >= 0} {
+   if [regexp -nocase {[ \t]*.subckt[ \t]+([^ \t]+)[ \t]+(.*)$} $line lmatch cellname pinlist] {
+      set idx [lsearch $antcells $cellname]
+      if {$idx >= 0} {
+	  puts "found cell $cellname pinlist $pinlist"
+	  set triplet [lindex $antlist $idx]
+	  lappend triplet $pinlist
+	  set antlist [lreplace $antlist $idx $idx $triplet]
+      }
+   }
+}
+
+puts "antcells is $antcells"
+puts "antlist is $antlist"
+
+close $fslib
+
+# Read SPICE netlist to the ".ends" line, and insert antenna cells.
+
+while {[gets $fspi line] >= 0} {
+   if [regexp -nocase {[ \t]*.ends} $line lmatch] {
+      # Insert the list here
+      foreach netchange $changelist {
+	 set netname [lindex $netchange 0]
+	 set instname [lindex $netchange 1]
+	 set cellname [lindex $netchange 2]
+	 set pinname [lindex $netchange 3]
+	 puts -nonewline $fsout "X${instname} "
+         set idx [lsearch $antcells $cellname]
+	 set triplet [lindex $antlist $idx]
+	 set pinlist [lindex $triplet 2]
+	 set inpin [lindex $triplet 1]
+         foreach p $pinlist {
+	    if {$p == $inpin} {
+	        puts -nonewline $fsout "$netname "
+	    } else {
+                # Warning:  This makes the assumption that power and
+		# ground names match those names used in the standard
+		# cell set.  But that's a convention, not an absolute.
+	        puts -nonewline $fsout "$p "
+	    }
+	 }
+	 puts $fsout "${cellname}"
+      }
+   }
+   puts $fsout $line
+}
+
+close $fspi
+close $fsout
+
+puts stdout "Done with annotate.tcl"

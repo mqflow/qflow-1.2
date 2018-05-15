@@ -140,6 +140,14 @@ if ( -f ${rootname}_unroute.def ) then
    cp ${rootname}_unroute.def ${rootname}.def
 endif
 
+if ( -f antenna.out ) then
+   rm -f antenna.out
+endif
+
+if ( -f failed.out ) then
+   rm -f failed.out
+endif
+
 if (${scripting} == "T") then
 
 #------------------------------------------------------------------
@@ -186,8 +194,54 @@ if ( !( -f ${rootname}_route.def || ( -M ${rootname}_route.def \
 endif
 
 #---------------------------------------------------------------------
+# Spot check:  Did qrouter produce file failed.out?
+#---------------------------------------------------------------------
+
+if ( -f failed.out && ( -M failed.out \
+		> -M ${rootname}.def )) then
+   echo "qrouter failure:  Not all nets were routed." |& tee -a ${synthlog}
+   echo "Premature exit." |& tee -a ${synthlog}
+   echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+   exit 1
+endif
+
+#---------------------------------------------------------------------
+# If qrouter generated an "antenna.out" file, then use it to
+# annotate the verilog and spice netlists.
+#---------------------------------------------------------------------
+
+if (${scripting} == "T") then
+   if ( -f antenna.out && ( -M antenna.out \
+		> -M ${rootname}.def )) then
+      echo "Running annotate.tcl antenna.out ${synthdir}/${rootname}.rtlnopwr.v" \
+		|& tee -a ${synthlog}
+      echo "  ${synthdir}/${rootname}.spc ${synthdir}/${rootname}.anno.v" \
+		|& tee -a ${synthlog}
+      echo "  ${synthdir}/${rootname}.anno ${spicefile}" |& tee -a ${synthlog}
+      ${scriptdir}/annotate.tcl antenna.out \
+		${synthdir}/${rootname}.rtlnopwr.v \
+		${synthdir}/${rootname}.spc \
+		${synthdir}/${rootname}.anno.v \
+		${synthdir}/${rootname}.anno.spc ${spicefile} |& tee -a ${synthlog}
+      # If the antenna.out file contained only unfixed errors, then
+      # the annotated output files may not exist, so check.
+      if ( -f ${synthdir}/${rootname}.anno.v ) then
+	 mv ${synthdir}/${rootname}.anno.v ${synthdir}/${rootname}.rtlnopwr.v 
+      endif
+      if ( -f ${synthdir}/${rootname}.anno.spc ) then
+	 mv ${synthdir}/${rootname}.anno.spc ${synthdir}/${rootname}.spc
+      endif
+   else
+      echo "No antenna.out file generated, no need to annotate netlists." \
+		|& tee -a ${synthlog}
+   endif
+endif
+
+#---------------------------------------------------------------------
 # If qrouter generated a ".cinfo" file, then annotate the ".cel"
-# file, re-run placement, and re-run routing.
+# file, re-run placement, and re-run routing.  Note that this feature
+# is not well refined, and currently not handled (qrouter standard
+# route script does not generate congestion information on failure).
 #---------------------------------------------------------------------
 
 if (${scripting} == "T") then

@@ -1391,6 +1391,7 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
       gateline = (char *)realloc(gateline, strlen(gateline) + strlen(inputline) + 1);
       strcat(gateline, inputline);	/* Append input line to gate */
    }
+   fprintf(outfptr, ".end\n");
    if (VerboseFlag) printf("\n");
    fflush(stdout);
 }
