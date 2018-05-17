@@ -10,7 +10,7 @@ LDFLAGS =
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 26
+REVISION = 27
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
@@ -24,7 +24,7 @@ TCL_SCRIPTS = blif2cel.tcl place2def.tcl place2lef2.tcl
 TCL_SCRIPTS += place2net2.tcl ypostproc.tcl ybuffer.tcl
 TCL_SCRIPTS += decongest.tcl addspacers.tcl getfillcell.tcl
 TCL_SCRIPTS += getantennacell.tcl blifanno.tcl annotate.tcl
-TCL_SCRIPTS += powerbus.tcl getpowerground.tcl
+TCL_SCRIPTS += powerbus.tcl getpowerground.tcl arrangepins.tcl
 PYTHON_SCRIPTS = spi2xspice.py consoletext.py pinmanager.py
 PYTHON_SCRIPTS += tksimpledialog.py helpwindow.py qflow_manager.py
 PYTHON_SCRIPTS += textreport.py tooltip.py
@@ -130,6 +130,9 @@ blifanno.tcl: blifanno.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
 
 annotate.tcl: annotate.tcl.in
+	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
+
+arrangepins.tcl: arrangepins.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
 
 install: $(TCL_SCRIPTS) $(PYTHON_SCRIPTS) $(SHELL_SCRIPTS) $(MAIN_SCRIPT) $(HELP_TEXT)

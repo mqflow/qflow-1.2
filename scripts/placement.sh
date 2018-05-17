@@ -467,8 +467,6 @@ if ($makedef == 1) then
 
       if ( -f ${rootname}_filled.def ) then
 	 mv ${rootname}_filled.def ${rootname}.def
-	 # Copy the .def file to a backup called "unroute"
-	 cp ${rootname}.def ${rootname}_unroute.def
       endif
 
       if ( -f ${rootname}.obsx ) then
@@ -476,10 +474,43 @@ if ($makedef == 1) then
          # overwrite the original.
 	 mv ${rootname}.obsx ${rootname}.obs
       endif
-   else
-      # Copy the .def file to a backup called "unroute"
-      cp ${rootname}.def ${rootname}_unroute.def
    endif
+
+   #---------------------------------------------------------------------
+   # Run pin position adjustment script to make sure that pins avoid the
+   # power buses and are actually close to their respective connections
+   # in the digital core, which is something that graywolf has serious
+   # problems ensuring.  Also puts pins on a double-pitch spacing to make
+   # it much easier for the router to reach them.
+   #---------------------------------------------------------------------
+
+   if ( -f ${scriptdir}/arrangepins.tcl ) then
+
+      if ( !( ${?arrangepins_options} )) then
+         set arrangepins_options = ""
+      endif
+
+      echo "Running arrangepins to adjust pin positions for optimal routing." \
+		|& tee -a ${synthlog}
+      echo "arrangepins.tcl ${arrangepins_options} ${rootname}" |& tee -a ${synthlog}
+      ${scriptdir}/arrangepins.tcl ${arrangepins_options} ${rootname} \
+		|& tee -a ${synthlog}
+
+      # Check if the _mod.def output file was generated, and if so, rename it
+      # back to plain .def.
+
+      if ( !( -f ${rootname}_mod.def || \
+		( -M ${rootname}_mod.def < -M ${rootname}.def ))) then
+          echo "Error (ignoring):"
+	  echo "   arrangepins.tcl failed to generate file ${rootname}_mod.def."
+      else
+          mv ${rootname}_mod.def ${rootname}.def
+      endif
+
+   endif
+
+   # Copy the .def file to a backup called "unroute"
+   cp ${rootname}.def ${rootname}_unroute.def
 
    # If the user didn't specify a number of layers for routing as part of
    # the project variables, then the info file created by qrouter will have
