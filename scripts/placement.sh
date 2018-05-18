@@ -400,7 +400,11 @@ if ($makedef == 1) then
    if ( !( ${?antennapin_in} )) then
       set antenna_opt = ""
    else
-      set antenna_opt = "antennapin=${antennapin_in}"
+      if ( !( ${?antennacell} )) then
+         set antenna_opt = ""
+      else
+         set antenna_opt = "antennapin=${antennapin_in} antennacell=${antennacell}"
+      endif
    endif
 
    if ( !( ${?place2def_options} )) then

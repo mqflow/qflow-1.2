@@ -96,10 +96,10 @@ while {[gets $fant line] >= 0} {
    }
    if [regexp {[ \t]*Net=([^ \t]+)[ \t]+Instance=([^ \t]+)[ \t]+Cell=([^ \t]+)[ \t]+Pin=([^ \t]+)} $line lmatch netname instname cellname pinname] {
       # Keep instances seen in a dictionary and ignore redundant entries
-      if [catch {[dict get $instlist $instname]}] {
+      if [catch {dict get $instlist $instname}] {
+         incr added
+         dict set changelist $instname [list $netname $cellname $pinname]
 	 dict set instlist $instname true
-	 incr added
-	 dict set changelist $instname [list $netname $cellname $pinname]
       }
    }
 }

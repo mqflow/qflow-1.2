@@ -24,7 +24,7 @@
 
 if {$argc < 2} {
    puts -nonewline stdout "Usage:  place2def <project_name> "
-   puts stdout "<fill_cell> \[<num_layers>\] \[scale=<n>\] \[antennapin=<name>\]"
+   puts stdout "<fill_cell> \[<num_layers>\] \[scale=<n>\] \[antennacell=<name> antennapin=<name>\]"
    exit 0
 }
 
@@ -44,6 +44,7 @@ set fill_cell [lindex $argv 1]
 set numlayers 0
 set scale 1
 set antennapin -
+set antennacell -
 
 while {$argc > 2} {
    incr argc -1
@@ -56,6 +57,7 @@ while {$argc > 2} {
 	 layers {set numlayers $value}
 	 scale {set scale $value}
 	 antennapin {set antennapin $value}
+	 antennacell {set antennacell $value}
 	 - {puts stdout "Unknown place2def.tcl option \"$key\", ignoring."}
       }
    } else {
@@ -672,10 +674,6 @@ close $fpl1
 
 #---------------------------------------------------------------------------
 # Write out a text file of all fill instances added to the design
-# NOTE:  The antenna cell pin is output for all cells, which is technically
-# wrong, but since when writing the netlist the pin name is matched to the
-# SPICE/verilog library model, fill cells that have no pins will just have
-# this entry ignored.
 #---------------------------------------------------------------------------
 
 if [catch {open fillcells.txt w} ffill] {
@@ -687,7 +685,12 @@ if [catch {open fillcells.txt w} ffill] {
    foreach fillinst $fillinsts {
       set instname [lindex $fillinst 0]
       set cellname [lindex $fillinst 1]
-      puts $ffill "Net=$ncnet$ncnum Instance=$instname Cell=$cellname Pin=$antennapin"
+      if {$cellname == $antennacell} {
+	 # Note:  Only the antenna cell should have a pin (other than power/ground)
+         puts $ffill "Net=$ncnet$ncnum Instance=$instname Cell=$cellname Pin=$antennapin"
+      } else {
+         puts $ffill "Net=$ncnet$ncnum Instance=$instname Cell=$cellname Pin=-"
+      }
       incr ncnum
    }
    close $ffill
