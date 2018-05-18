@@ -20,6 +20,9 @@
 # stripe.  Use of "-nostretch" will place the stripes over the existing
 # layout without making extra space with fill.  This is generally
 # preferred unless it makes the cell unroutable.
+#
+# Updated 5/18/2018 to generate an output file with the instances
+# added to the design, so these can be incorporated into the netlist.
 #---------------------------------------------------------------------------
 
 namespace path {::tcl::mathop ::tcl::mathfunc}
@@ -1299,6 +1302,8 @@ if {$dostretch == false} {
     }
 }
 
+set newinstlist {}
+
 while {[gets $fdef line] >= 0} {
     if [regexp {[ \t]*#} $line lmatch] {
 	continue
@@ -1471,7 +1476,9 @@ while {[gets $fdef line] >= 0} {
 			foreach fmacro $stripefills {
 			    set fw [set ${fmacro}(w)]
 			    set xpos [+ $px $xadd]
-			    puts $fanno "- ${fmacro}_${r}_${s}_${i} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
+			    set newinstname ${fmacro}_${r}_${s}_${i} 
+			    puts $fanno "- ${newinstname} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
+			    lappend newinstlist [list $newinstname $fmacro]
 			    set xadd [+ $xadd $fw]
 			    incr i
 			}
@@ -1508,7 +1515,9 @@ while {[gets $fdef line] >= 0} {
 			set fw [set ${fmacro}(w)]
 			set fn [lindex $fpair 1]
 			for {set i 1} {$i <= $fn} {incr i} {
-			    puts $fanno "- ${fmacro}_${r}_${i} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
+			    set newinstname ${fmacro}_${r}_${i} 
+			    puts $fanno "- ${newinstname} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
+			    lappend newinstlist [list $newinstname $fmacro]
 			    set xpos [+ $xpos $fw]
 			}
 		    }
@@ -1630,6 +1639,26 @@ if {$dostripes && $dostretch} {
     }
     close $outfobs
     close $infobs
+}
+
+# Output the list of new instances added.  The file will have already
+# been created by the "decongest" script if density reducing fill was
+# added, so open in "append" mode.
+
+if [catch {open fillcells.txt a} ffill] {
+    puts stderr "Error: can't open file fillcells.txt for output (ignoring)"
+    # Not a fatal error, although it will cause issues with LVS if
+    # antenna cells are used.
+} else {
+    # Note that the net name is unused, but must be unique to be parsed
+    # correctly by the annotation script.
+    set ncnet __spacer_nc_
+    set ncnum 0
+    foreach pair $newinstlist {
+	puts $ffill "Net=$ncnet$ncnum Instance=[lindex $pair 0] Cell=[lindex $pair 1] Pin=-"
+	incr ncnum
+    }
+    close $ffill
 }
 
 puts stdout "Done with addspacers.tcl"

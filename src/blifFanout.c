@@ -1051,6 +1051,7 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
    int  gateinputs;
    int  pincount;
    int  needscorrecting;
+   int  hasended;
    int slen;
    int hier;
    char *spos;
@@ -1066,6 +1067,7 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
    state = NONE;
    needscorrecting = 0;
    firstseen = 0;
+   hasended = 0;
 
    // Find the gate record corresponding to the buffer name
    glbuf = (struct Gatelist *)HashLookup(Buffername, Gatehash);
@@ -1379,7 +1381,10 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 	    gateline[0] = '\0';		/* Starting a new gate */
 
 	    if (state == ENDMODEL)
-	       fprintf(outfptr, "%s", inputline); 
+	       if (hasended == 0) {
+		  fprintf(outfptr, "%s", inputline); 
+		  hasended = 1;
+	       }
          }
 	 else if (state == NONE) {
 	    /* Print line and reset so we don't overflow gateline */
@@ -1391,7 +1396,7 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
       gateline = (char *)realloc(gateline, strlen(gateline) + strlen(inputline) + 1);
       strcat(gateline, inputline);	/* Append input line to gate */
    }
-   fprintf(outfptr, ".end\n");
+   if (hasended == 0) fprintf(outfptr, ".end\n");
    if (VerboseFlag) printf("\n");
    fflush(stdout);
 }

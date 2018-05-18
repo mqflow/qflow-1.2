@@ -116,6 +116,14 @@ else
    set lefpath=${techdir}/${leffile}
 endif
 
+# Ditto for spicefile
+set abspath=`echo ${spicefile} | cut -c1`
+if ( "${abspath}" == "/" ) then
+   set spicepath=${spicefile}
+else
+   set spicepath=${techdir}/${spicefile}
+endif
+
 #----------------------------------------------------------
 # Done with initialization
 #----------------------------------------------------------
@@ -207,22 +215,35 @@ endif
 
 #---------------------------------------------------------------------
 # If qrouter generated an "antenna.out" file, then use it to
-# annotate the verilog and spice netlists.
+# annotate the verilog and spice netlists.  If there is a file
+# "fillcells.txt" file, then add those to the netlists as well,
+# while ignoring any that already appeared in the antenna.out file.
 #---------------------------------------------------------------------
 
 if (${scripting} == "T") then
-   if ( -f antenna.out && ( -M antenna.out \
-		> -M ${rootname}.def )) then
+   # If fill cells were documented in "fillcells.txt", append the file to
+   # "antenna.out" before processing.
+   if ( -f fillcells.txt && ( -M fillcells.txt > -M $rootname}.cel )) then
+      if ( -f antenna.out && ( -M antenna.out > -M ${rootname}.cel )) then
+	 cat fillcells.txt >> antenna.out
+      else
+	 cp fillcells.txt antenna.out
+      endif
+   endif
+
+   if ( -f antenna.out && ( -M antenna.out > -M ${rootname}_unroute.def )) then
       echo "Running annotate.tcl antenna.out ${synthdir}/${rootname}.rtlnopwr.v" \
 		|& tee -a ${synthlog}
       echo "  ${synthdir}/${rootname}.spc ${synthdir}/${rootname}.anno.v" \
 		|& tee -a ${synthlog}
-      echo "  ${synthdir}/${rootname}.anno ${spicefile}" |& tee -a ${synthlog}
+      echo "  ${synthdir}/${rootname}.anno ${spicepath} ${synthdir}/${rootname}_powerground" \
+		|& tee -a ${synthlog}
       ${scriptdir}/annotate.tcl antenna.out \
 		${synthdir}/${rootname}.rtlnopwr.v \
 		${synthdir}/${rootname}.spc \
 		${synthdir}/${rootname}.anno.v \
-		${synthdir}/${rootname}.anno.spc ${spicefile} |& tee -a ${synthlog}
+		${synthdir}/${rootname}.anno.spc ${spicepath} \
+		${synthdir}/${rootname}_powerground |& tee -a ${synthlog}
       # If the antenna.out file contained only unfixed errors, then
       # the annotated output files may not exist, so check.
       if ( -f ${synthdir}/${rootname}.anno.v ) then

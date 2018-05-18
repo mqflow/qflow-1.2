@@ -18,11 +18,13 @@
 # into the original cell plus the filler cell in front.
 #
 # Modified 5/8/2018 for modified syntax on aggregate cells + fill
+# Modified 5/18/2018 to create file of fill cell instances for splicing
+# back into the netlist.
 #---------------------------------------------------------------------------
 
 if {$argc < 2} {
    puts -nonewline stdout "Usage:  place2def <project_name> "
-   puts stdout "<fill_cell> \[<num_layers>\] \[scale=<n>\]"
+   puts stdout "<fill_cell> \[<num_layers>\] \[scale=<n>\] \[antennapin=<name>\]"
    exit 0
 }
 
@@ -41,6 +43,7 @@ set fill_cell [lindex $argv 1]
 
 set numlayers 0
 set scale 1
+set antennapin -
 
 while {$argc > 2} {
    incr argc -1
@@ -52,6 +55,7 @@ while {$argc > 2} {
       switch $key {
 	 layers {set numlayers $value}
 	 scale {set scale $value}
+	 antennapin {set antennapin $value}
 	 - {puts stdout "Unknown place2def.tcl option \"$key\", ignoring."}
       }
    } else {
@@ -538,6 +542,8 @@ if {$metal2(orient) == "vertical"} {
    }
 }
 
+set fillinsts {}
+
 while {[gets $fpl1 line] >= 0} {
    # Each line in the file is <instance> <llx> <lly> <urx> <ury> <orient> <row>
    regexp \
@@ -611,6 +617,8 @@ while {[gets $fpl1 line] >= 0} {
       if {[string equal -length 6 $instance twfeed]} {
          # Replace twfeed with name of filler cell
 	 set cellname ${fill_cell}
+	 # Add to list of fill cells
+	 lappend fillinsts [list $instance $cellname]
       } else {
 
 	 # Pull out the fill cells if one or more was spliced into
@@ -631,7 +639,9 @@ while {[gets $fpl1 line] >= 0} {
 	    set outllxoff [expr int($llxoff * $multiplier)]
 	    set outllyoff [expr int($llyoff * $multiplier)]
 	    incr numcomps -1
-	    puts $fdef "- ${fillcell}_${i}_$baseinst $fillcell + PLACED ( $outllxoff $outllyoff ) $ostr ;"
+	    set instname ${fillcell}_${i}_$baseinst
+	    puts $fdef "- $instname $fillcell + PLACED ( $outllxoff $outllyoff ) $ostr ;"
+	    lappend fillinsts [list $instname $fillcell]
 	    set llx [expr $llx + $fillwidth]
 	    incr i
 	 }
@@ -659,6 +669,29 @@ while {[gets $fpl1 line] >= 0} {
 }
 
 close $fpl1
+
+#---------------------------------------------------------------------------
+# Write out a text file of all fill instances added to the design
+# NOTE:  The antenna cell pin is output for all cells, which is technically
+# wrong, but since when writing the netlist the pin name is matched to the
+# SPICE/verilog library model, fill cells that have no pins will just have
+# this entry ignored.
+#---------------------------------------------------------------------------
+
+if [catch {open fillcells.txt w} ffill] {
+   puts stderr "Cannot open file fillcells.txt for output (ignoring)"
+} else {
+   puts $ffill "# Fill cell instances added to the design:"
+   set ncnet __antenna_nc_
+   set ncnum 0
+   foreach fillinst $fillinsts {
+      set instname [lindex $fillinst 0]
+      set cellname [lindex $fillinst 1]
+      puts $ffill "Net=$ncnet$ncnum Instance=$instname Cell=$cellname Pin=$antennapin"
+      incr ncnum
+   }
+   close $ffill
+}
 
 #---------------------------------------------------------------------------
 # Part 3:  Nets (unrouted)

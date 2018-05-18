@@ -394,11 +394,22 @@ if ($makedef == 1) then
    endif
    echo "Using cell ${usefillcell} for fill" |& tee -a ${synthlog}
 
-   # Run place2def to turn the GrayWolf output into a DEF file
+   # Set up antenna pin option, if it is defined, then use user-defined
+   # options for place2def, if they are defined.
+
+   if ( !( ${?antennapin_in} )) then
+      set antenna_opt = ""
+   else
+      set antenna_opt = "antennapin=${antennapin_in}"
+   endif
 
    if ( !( ${?place2def_options} )) then
-      set place2def_options = ""
+      set place2def_options = $antenna_opt
+   else
+      set place2def_options = "$antenna_opt $place2def_options"
    endif
+
+   # Run place2def to turn the GrayWolf output into a DEF file
 
    echo "Running place2def to translate graywolf output to DEF format." \
 		|& tee -a ${synthlog}
