@@ -209,6 +209,12 @@ proc parse_pin {pinname macroname leffile ox oy} {
     # puts "parse_pin"
     # puts "macroname: $macroname, pinname: $pinname"
 
+    set lefpinname $pinname
+
+    # Normalize LEF and blif to use the same array delimiters
+    regsub -all "<" $pinname "\[" pinname
+    regsub -all ">" $pinname "\]" pinname
+
     while {[gets $leffile line] >= 0} {
 	if [regexp {^[ \t]*#} $line lmatch] {
 	    # Comment line, ignore.
@@ -221,7 +227,7 @@ proc parse_pin {pinname macroname leffile ox oy} {
 	    # puts "Port type: $porttype"
 	    set ${macroname}(${pinname},type) [string trim $porttype]
 	} elseif [regexp {[ \t]*END[ \t]+([^ \t]+)[ \t]*$} $line lmatch pintest] {
-	    if {"$pintest" == "$pinname"} {
+	    if {"$pintest" == "$lefpinname"} {
 		break
 	    } else {
 		puts stdout "Unexpected END statement $line while parsing pin $pinname"
@@ -333,6 +339,7 @@ proc parse_hard_macro {leffile macroname} {
 
     # puts stderr "Parsing hard macro $macroname:  Ports are:"
     puts stderr "Parsing hard macro $macroname"
+    set ${macroname}(hard) true
     while {[gets $leffile line] >= 0} {
 	if [regexp {^[ \t]*#} $line lmatch] {
 	    # Comment line, ignore.
@@ -503,7 +510,6 @@ foreach flef $flefs {
     }
 }
  
-set label_hard_macro {}
 foreach fhardmacro $fhardmacros { 
     puts stdout "Reading macros from hard macro LEF file. . ."
     flush stdout
@@ -517,7 +523,6 @@ foreach fhardmacro $fhardmacros {
 	    if {[lsearch $macrolist $macroname] >= 0} {
 		# Parse the "macro" statement 
 		parse_hard_macro $fhardmacro $macroname
-		lappend label_hard_macro $macroname
 	    } else {
 		# This macro is not used. . . skip to end of macro
 		while {[gets $fhardmacro line] >= 0} {
@@ -602,24 +607,12 @@ while {[gets $fnet line] >= 0} {
 	if {[catch {incr ${mode}(count)}]} {set ${mode}(count) 0}
 	set j [set ${mode}(count)]
 
-	set is_hard_macro False 
-	foreach testname $label_hard_macro {
-	    if {$testname==$macroname} {
-		set is_hard_macro True
-	    }
-	}
-
-	if $is_hard_macro {
-	    puts "$macroname is a hard macro"
-	    #puts $fcel "fixed neighborhood 0 from L"
-	    #puts $fcel "corners 4 $left $bottom $right $bottom $left $top $right $top"
-	    #puts $fcel "class 0 orientations 0 2"
-	    puts $fcel "hardcell $i ${mode}_$j"
-	    puts $fcel "left $left right $right bottom $bottom top $top"
-	} else {
+	if [catch {set is_hard_macro ${mode}(hard)}] {
 	    puts $fcel "cell $i ${mode}_$j"
-	    puts $fcel "left $left right $right bottom $bottom top $top"
+	} else {
+	    puts $fcel "hardcell $i ${mode}_$j"
 	}
+	puts $fcel "left $left right $right bottom $bottom top $top"
 	incr i
 
 	# Follow this with implicit feedthroughs, as many as will fit
@@ -638,25 +631,33 @@ while {[gets $fnet line] >= 0} {
 	    if [regexp {([^ \t=]+)=([^ \t]+)} $pinsig lmatch pinname netname] {
 		regsub -all "<" $pinname "\[" pinname
 		regsub -all ">" $pinname "\]" pinname
-		set pinx [set ${mode}(${pinname},xp)]
-		set piny [set ${mode}(${pinname},yp)]
-		set pinlayer [set ${mode}(${pinname},layer)]
-		set pintype [set ${mode}(${pinname},type)]
 
-		# Is signal a buffer tree?  If so, make it swappable, if it's an input
-		if [regexp {(.*)_bF\$buf[0-9]+$} $netname lmatch sigpfix] {
-		    if  {$pintype == "INPUT"} {
-			puts $fcel "pin_group"
-			puts -nonewline $fcel "pin name ${sigpfix}_bF\$pin/$pinname "
-			puts $fcel "signal $netname layer $pinlayer $pinx $piny"
-			puts $fcel "end_pin_group"
-		    } else {
-			puts -nonewline $fcel "pin name $pinname signal $netname "
-			puts $fcel "layer $pinlayer $pinx $piny"
-		    }
+		# Check for bad pin names instead of failing
+
+		if [catch {set ${mode}(${pinname},xp)}] {
+		    puts stderr "ERROR:  pin name ${pinname} not found!"
 		} else {
-		    puts -nonewline $fcel "pin name $pinname signal $netname layer "
-		    puts $fcel "$pinlayer $pinx $piny"
+
+		    set pinx [set ${mode}(${pinname},xp)]
+		    set piny [set ${mode}(${pinname},yp)]
+		    set pinlayer [set ${mode}(${pinname},layer)]
+		    set pintype [set ${mode}(${pinname},type)]
+
+		    # Is signal a buffer tree?  If so, make it swappable, if it's an input
+		    if [regexp {(.*)_bF\$buf[0-9]+$} $netname lmatch sigpfix] {
+			if  {$pintype == "INPUT"} {
+			    puts $fcel "pin_group"
+			    puts -nonewline $fcel "pin name ${sigpfix}_bF\$pin/$pinname "
+			    puts $fcel "signal $netname layer $pinlayer $pinx $piny"
+			    puts $fcel "end_pin_group"
+			} else {
+			    puts -nonewline $fcel "pin name $pinname signal $netname "
+			    puts $fcel "layer $pinlayer $pinx $piny"
+			}
+		    } else {
+			puts -nonewline $fcel "pin name $pinname signal $netname layer "
+			puts $fcel "$pinlayer $pinx $piny"
+		    }
 		}
 	    }
 	    flush stdout

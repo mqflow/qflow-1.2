@@ -913,6 +913,9 @@ class QflowManager(ttk.Frame):
         # Make a copy of the .magicrc file for startup with some
         # layout commands running automatically at startup.
 
+        self.print("Diagnostic 1")
+        self.update_idletasks()
+
         if os.path.isfile(ldir + '/.magicrc'):
             with open(ldir + '/.magicrc', 'r') as ifile:
                 rclines = ifile.read().splitlines()
@@ -961,11 +964,14 @@ class QflowManager(ttk.Frame):
         # creates the prefs.json file and exposes the known entries
         # is on the to-do list.
 
+        self.print("Diagnostic 2")
+        self.update_idletasks()
+
         if not self.magicgtype:
             mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-d', '0', '-noconsole'],
 			stdout = subprocess.PIPE, stderr = subprocess.PIPE,
 			universal_newlines = True)
-            magicpair = mproc.communicate()
+            magicpair = mproc.communicate(timeout=1)
             if 'graphics' in self.prefs:
                 self.magicgtype = self.prefs['graphics']
             else:
@@ -978,17 +984,23 @@ class QflowManager(ttk.Frame):
                 #     self.magicgtype = 'OGL'
                 #     break
 
+        self.print("Diagnostic 3")
+        self.update_idletasks()
+
         if not self.magicversion:
             mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-dnull', '-noconsole', '--version'],
 			stdout = subprocess.PIPE, stderr = subprocess.PIPE,
 			universal_newlines = True)
-            magicpair = mproc.communicate()
+            magicpair = mproc.communicate(timeout=1)
             self.magicversion = magicpair[0].splitlines()[0]
-            print('Magic version is ' + self.magicversion)
+            self.print('Magic version is ' + self.magicversion)
+
+        self.print("Diagnostic 4")
+        self.update_idletasks()
 
         # Run magic interactively until the user exits.
         mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-d', self.magicgtype, '-rcfile', 'qflow.magicrc'],
-		cwd = ldir)
+		stdout = self.stdout, stderr = self.stderr, cwd = ldir)
 
         # Do not wait for user to exit.  The temporary magicrc file may remain in place.
         # magicpair = mproc.communicate()
@@ -3288,7 +3300,7 @@ class QflowManager(ttk.Frame):
                     
                 if not os.path.exists(sourcedir):
                     os.makedirs(sourcedir)
-                if not os.path.islink(sourcedir + '/' + rootname):
+                if not os.path.exists(sourcedir + '/' + rootname):
                     relpath = os.path.relpath(srcpath + '/' + rootname, sourcedir)
                     os.symlink(relpath, sourcedir + '/' + rootname)
                 self.verilog = sourcedir + '/' + rootname

@@ -143,17 +143,29 @@ endif
 
 cd ${projectpath}
 
-echo "Running blif2cel to generate input files for graywolf" |& tee -a ${synthlog}
 if ( "$techleffile" == "" ) then
-    echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif --lef ${lefpath} --cel ${layoutdir}/${rootname}.cel" |& tee -a ${synthlog}
-    ${scriptdir}/blif2cel.tcl --blif ${synthdir}/${rootname}.blif \
-	--lef ${lefpath} --cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
+    set lefoptions=""
 else
-    echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif --lef ${techlefpath} --lef ${lefpath} --cel ${layoutdir}/${rootname}.cel" |& tee -a ${synthlog}
-    ${scriptdir}/blif2cel.tcl --blif ${synthdir}/${rootname}.blif \
-	--lef ${techlefpath} --lef ${lefpath} \
-	--cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
+    set lefoptions="--lef ${techlefpath}"
 endif
+set lefoptions="${lefoptions} --lef ${lefpath}"
+
+# Pass additional .lef files to blif2cel.tcl from the hard macros list
+
+if ( ${?hard_macros} ) then
+    foreach macro_path ( $hard_macros )
+	foreach file ( `ls ${sourcedir}/${macro_path}` )
+	    if ( ${file:e} == "lef" ) then
+		set lefoptions="${lefoptions} --hard-macro ${sourcedir}/${macro_path}/${file}"
+	    endif
+	end
+    end
+endif
+
+echo "Running blif2cel to generate input files for graywolf" |& tee -a ${synthlog}
+echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif ${lefoptions} --cel ${layoutdir}/${rootname}.cel" |& tee -a ${synthlog}
+${scriptdir}/blif2cel.tcl --blif ${synthdir}/${rootname}.blif \
+	${lefoptions} --cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
 
 set errcond = $status
 if ( ${errcond} != 0 ) then
