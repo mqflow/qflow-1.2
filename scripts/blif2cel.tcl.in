@@ -346,8 +346,8 @@ proc parse_hard_macro {leffile macroname} {
 	} elseif [regexp {[ \t]*SYMMETRY[ \t]+(.+)[ \t]*;} $line lmatch symmetry] {
 	    set ${macroname}(symmetry) $symmetry
 	} elseif [regexp {[ \t]*ORIGIN[ \t]+(.+)[ \t]+(.+)[ \t]*;} $line lmatch x y] {
-	    set x [expr {round($x * $units)}]
-	    set y [expr {round($y * $units)}]
+	    set x [expr {round(-$x * $units)}]
+	    set y [expr {round(-$y * $units)}]
 	    set ${macroname}(x) $x
 	    set ${macroname}(y) $y
 	} elseif [regexp {[ \t]*SIZE[ \t]+(.+)[ \t]+BY[ \t]+(.+)[ \t]*;} \
@@ -357,24 +357,10 @@ proc parse_hard_macro {leffile macroname} {
 	    set ${macroname}(w) $w
 	    set ${macroname}(h) $h
 
-	    # Compute derived values
-	    # ox, oy are the LEF coordinates where GrayWolf expects the "origin"
-	    set ox [expr {$x + ($w / 2)}]
-	    set oy [expr {$y + ($h / 2)}]
-	    set left [expr {-($w / 2)}]
-	    set right [expr {$left + $w}]
-	    set bottom [expr {-($h / 2)}]
-	    set top [expr {$bottom + $h}]
-	    set ${macroname}(ox) $ox
-	    set ${macroname}(oy) $oy
-	    set ${macroname}(left) $left
-	    set ${macroname}(right) $right
-	    set ${macroname}(top) $top
-	    set ${macroname}(bottom) $bottom
 	} elseif [regexp {[ \t]*PIN[ \t]+(.+)[ \t]*$} $line lmatch pinname] {
 	    # Ignore additional information from LEF version 5.6 syntax
 	    set pinname [lindex $pinname 0]
-	    parse_pin $pinname $macroname $leffile $ox $oy
+	    parse_pin $pinname $macroname $leffile $x $y
 	} elseif [regexp {[ \t]*END[ \t]+(^:+)[ \t]*$} $line lmatch macrotest] {
 	    if {"$macrotest" == "$macroname"} {
 		break
@@ -599,32 +585,46 @@ set i 0
 while {[gets $fnet line] >= 0} {
     if [regexp {^[ \t]*\.gate[ \t]+([^ \t]+)[ \t]+(.*)$} $line lmatch macroname rest] {
 	set mode $macroname
-	set left [set ${mode}(left)]
-	set right [set ${mode}(right)]
-	set width [set ${mode}(w)]
-	set top [set ${mode}(top)]
-	set bottom [set ${mode}(bottom)]
 	if {[catch {incr ${mode}(count)}]} {set ${mode}(count) 0}
-	set j [set ${mode}(count)]
+	set count [set ${mode}(count)]
+	if {[catch {set ${mode}(hard)}]} {set ${mode}(hard) false}
+	set hard [set ${mode}(hard)]
 
-	if [catch {set is_hard_macro ${mode}(hard)}] {
-	    puts $fcel "cell $i ${mode}_$j"
+	if ${hard} {
+	    set x [set ${mode}(x)]
+	    set y [set ${mode}(y)]
+	    set w [set ${mode}(w)]
+	    set h [set ${mode}(h)]
+	    set maxx [expr {$x + $w}]
+	    set maxy [expr {$y + $h}]
+
+	    puts $fcel "hardcell $i name ${mode}_${count}"
+	    puts $fcel "corners 4 0 0 0 $maxy $maxx $maxy $maxx 0"
+	    puts $fcel "class $i orientations 0 1 2 3"
+
+	    # Ignore implicit feedthroughs on hard macros (?)
+
 	} else {
-	    puts $fcel "hardcell $i ${mode}_$j"
-	}
-	puts $fcel "left $left right $right bottom $bottom top $top"
-	incr i
+	    set left [set ${mode}(left)]
+	    set right [set ${mode}(right)]
+	    set top [set ${mode}(top)]
+	    set bottom [set ${mode}(bottom)]
 
-	# Follow this with implicit feedthroughs, as many as will fit
-	# set feedx [expr {$left + ($pitchx / 2)}]
-	set feedx [expr {$left + ($pitchx / 2) + ($trackskip * $pitchx)}]
-	set k 1
-	while {$feedx < $right} {
-	    puts $fcel "pin name twfeed${k} signal TW_PASS_THRU layer 1 $feedx $bottom"
-	    puts $fcel "   equiv name twfeed${k} layer 1 $feedx $top"
-	    set feedx [expr {$feedx + $pitchx}]
-	    incr k
+	    puts $fcel "cell $i ${mode}_${count}"
+	    puts $fcel "left $left right $right bottom $bottom top $top"
+
+	    # Follow this with implicit feedthroughs, as many as will fit
+	    # set feedx [expr {$left + ($pitchx / 2)}]
+	    set feedx [expr {$left + ($pitchx / 2) + ($trackskip * $pitchx)}]
+	    set k 1
+	    while {$feedx < $right} {
+	        puts $fcel "pin name twfeed${k} signal TW_PASS_THRU layer 1 $feedx $bottom"
+	        puts $fcel "   equiv name twfeed${k} layer 1 $feedx $top"
+	        set feedx [expr {$feedx + $pitchx}]
+	        incr k
+	    }
 	}
+	incr i
 
 	# In the middle of parsing an instance;  mode = instance name (in lowercase).
 	foreach pinsig $rest {
@@ -641,7 +641,17 @@ while {[gets $fnet line] >= 0} {
 		    set pinx [set ${mode}(${pinname},xp)]
 		    set piny [set ${mode}(${pinname},yp)]
 		    set pinlayer [set ${mode}(${pinname},layer)]
-		    set pintype [set ${mode}(${pinname},type)]
+		    if [catch {set pintype [set ${mode}(${pinname},type)]}] {
+			set pintype SIGNAL
+		    }
+		    if {$hard} {
+			# This may be temporary---it appears that magic generates
+			# LEF output with pins outside the bounding box. . .
+			if {$pinx < 0} {set pinx 0}
+			if {$piny < 0} {set piny 0}
+			if {$pinx > $maxx} {set pinx $maxx}
+			if {$piny > $maxy} {set piny $maxy}
+		    }
 
 		    # Is signal a buffer tree?  If so, make it swappable, if it's an input
 		    if [regexp {(.*)_bF\$buf[0-9]+$} $netname lmatch sigpfix] {

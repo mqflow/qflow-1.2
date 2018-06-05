@@ -203,33 +203,46 @@ cd ${layoutdir}
 # is set to that name for those scripts that only handle one kind of
 # fill cell.
 
-if ( ${?fillcell} && ("x$fillcell" != "x")) then
-   if ( ${?decapcell} && ("x$decapcell" != "x")) then
-      if ( ${?antennacell} && ("x$antennacell" != "x")) then
+# Make sure all cell types are defined, but an empty string if not used.
+
+if ( ! ${?fillcell} ) then
+   set fillcell = ""
+endif
+if ( ! ${?decapcell} ) then
+   set decapcell = ""
+endif
+if ( ! ${?antennacell} ) then
+   set antennacell = ""
+endif
+
+if ("x$fillcell" != "x") then
+   if ("x$decapcell" != "x") then
+      if ("x$antennacell" != "x") then
 	 set fillers = "${fillcell},${decapcell},${antennacell}"
       else
 	 set fillers = "${fillcell},${decapcell},"
       endif
-   else if ( ${?antennacell} && ("x$antennacell" != "x")) then
+   else if ("x$antennacell" != "x") then
       set fillers = "${fillcell},,${antennacell}"
    else
       set fillers = "${fillcell}"
    endif
 else
-   if ( ${?decapcell} && ("x$decapcell" != "x")) then
-      if ( ${?antennacell} && ("x$antennacell" != "x")) then
+   if ("x$decapcell" != "x") then
+      if ("x$antennacell" != "x") then
 	 set fillers = ",${decapcell},${antennacell}"
       else
 	 set fillers = ",${decapcell},"
       endif
       set fillcell = ${decapcell}
-   else if ( ${?antennacell} && ("x$antennacell" != "x")) then
+   else if ("x$antennacell" != "x") then
       set fillers = ",,${antennacell}"
       set fillcell = ${antennacell}
    else
       # There is no fill cell, which is likely to produce poor results.
       echo "Warning:  No fill cell types are defined in the tech setup script."
       echo "This is likely to produce poor layout and/or poor routing results."
+      set fillers = ""
       set fillcell = ""
    endif
 endif
@@ -415,7 +428,11 @@ if ($makedef == 1) then
       if ( !( ${?antennacell} )) then
          set antenna_opt = ""
       else
-         set antenna_opt = "antennapin=${antennapin_in} antennacell=${antennacell}"
+	 if ( "x${antennacell}" == "x" ) then
+            set antenna_opt = ""
+	 else
+            set antenna_opt = "antennapin=${antennapin_in} antennacell=${antennacell}"
+	 endif
       endif
    endif
 
