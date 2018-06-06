@@ -64,6 +64,7 @@ set inspecial false
 set incomps false
 set inpins false
 set innets false
+
 while {[gets $fdef line] >= 0} {
     if [regexp {[ \t]*#} $line lmatch] {
         continue
@@ -235,6 +236,7 @@ while {[gets $fdef line] >= 0} {
 		dict set layerrec ypitch $pitch
 	    }
 	    dict set layersrec $layer $layerrec
+
  	} elseif [regexp {[ \t]*DIEAREA[ \t]+\([ \t]*(-?[0-9]+)[ \t]+(-?[0-9]+)[ \t]*\)[ \t]*\([ \t]*(-?[0-9]+)[ \t]+(-?[0-9]+)[ \t]*\)} $line lmatch diellx dielly dieurx dieury] {
 	    # Initialize the pin bounding box to the die area center point
 	    set pinllx [/ [+ $diellx $dieurx] 2]
@@ -243,6 +245,37 @@ while {[gets $fdef line] >= 0} {
 	    set pinury $pinlly
 	}
     }
+}
+
+# Check if all layer records have an xpitch and a ypitch.  If one is
+# missing, pull it from the next layer above, or failing that, below.
+
+# Note that "dict keys" preserves order
+set layernames [dict keys $layersrec]
+
+# Run once forwards to make sure xpitch and ypitch are seeded with
+# the values for the highest layer for which each one is defined.
+
+for {set i 0} {$i < [llength $layernames]} {incr i} {
+   catch {dict get $layerrec xpitch}
+   catch {dict get $layerrec ypitch}
+}
+
+# Now run backwards, so that each layer gets xpitch and ypitch
+# defined, taking the value from the closest layer above it, if
+# it is not defined.
+
+for {set i [- [llength $layernames] 1]} {$i >= 0} {incr i -1} {
+   set layername [lindex $i $layernames]
+   set layerrect [dict get $layersrec $layername]
+
+   # Get layer's xpitch and ypitch, otherwise set it to the current value.
+   if [catch {dict get $layerrec xpitch}] {
+      dict set layerrec xpitch $xpitch
+   }
+   if [catch {dict get $layerrec ypitch}] {
+      dict set layerrec ypitch $ypitch
+   }
 }
 
 close $fdef

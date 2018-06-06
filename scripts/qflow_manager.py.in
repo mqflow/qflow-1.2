@@ -2522,7 +2522,11 @@ class QflowManager(ttk.Frame):
                     pinlist = [val for pair in zip(pins[0], pins[1]) for val in pair]
                     pinpair = list(pinlist[p:p + 2] for p in range(0, len(pinlist), 2))
                     for pin in pinpair:
-                        if pin[0].lower() != pin[1].lower():
+                        # Avoid flagging global vs. local names, e.g., "gnd" vs. "gnd!,"
+                        # and ignore case when comparing pins.
+                        pin0 = re.sub('(.+)!', '\g<1>', pin[0].lower())
+                        pin1 = re.sub('(.+)!', '\g<1>', pin[1].lower())
+                        if pin0 != pin1:
                             failures += 1
                             pinfail += 1
 

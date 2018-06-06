@@ -620,7 +620,7 @@ proc parse_components {deffile rows} {
 proc get_power {macroname} {
     global $macroname
     foreach name [array names $macroname] {
-	if {[set ${macroname}($name)] == "POWER"} {
+	if {[set ${macroname}(${name})] == "POWER"} {
             set cidx [- [string first "," $name] 1]
  	    return [string range $name 0 $cidx]
         }
@@ -635,12 +635,29 @@ proc get_power {macroname} {
 proc get_ground {macroname} {
     global $macroname
     foreach name [array names $macroname] {
-	if {[set ${macroname}($name)] == "GROUND"} {
+	if {[set ${macroname}(${name})] == "GROUND"} {
             set cidx [- [string first "," $name] 1]
  	    return [string range $name 0 $cidx]
         }
     }
     return ""
+}
+
+#-----------------------------------------------------------------
+# Get the first input pin name from a macro.  This is for use in
+# writing fillcells.txt, for which a cell with no input pin
+# should write PIN=-, so return "-" if there is no input pin.
+#-----------------------------------------------------------------
+
+proc get_inputpin {macroname} {
+    global $macroname
+    foreach name [array names $macroname] {
+	if {[set ${macroname}(${name})] == "INPUT"} {
+            set cidx [- [string first "," $name] 1]
+ 	    return [string range $name 0 $cidx]
+        }
+    }
+    return "-"
 }
 
 #-----------------------------------------------------------------
@@ -1478,7 +1495,8 @@ while {[gets $fdef line] >= 0} {
 			    set xpos [+ $px $xadd]
 			    set newinstname ${fmacro}_${r}_${s}_${i} 
 			    puts $fanno "- ${newinstname} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
-			    lappend newinstlist [list $newinstname $fmacro]
+			    set fpin [get_inputpin ${fmacro}]
+			    lappend newinstlist [list $newinstname $fmacro $fpin]
 			    set xadd [+ $xadd $fw]
 			    incr i
 			}
@@ -1517,7 +1535,8 @@ while {[gets $fdef line] >= 0} {
 			for {set i 1} {$i <= $fn} {incr i} {
 			    set newinstname ${fmacro}_${r}_${i} 
 			    puts $fanno "- ${newinstname} ${fmacro} + PLACED ( $xpos $py ) $orient ;"
-			    lappend newinstlist [list $newinstname $fmacro]
+			    set fpin [get_inputpin ${fmacro}]
+			    lappend newinstlist [list $newinstname $fmacro $fpin]
 			    set xpos [+ $xpos $fw]
 			}
 		    }
@@ -1655,8 +1674,8 @@ if [catch {open fillcells.txt a} ffill] {
     # correctly by the annotation script.
     set ncnet __spacer_nc_
     set ncnum 0
-    foreach pair $newinstlist {
-	puts $ffill "Net=$ncnet$ncnum Instance=[lindex $pair 0] Cell=[lindex $pair 1] Pin=-"
+    foreach triplet $newinstlist {
+	puts $ffill "Net=$ncnet$ncnum Instance=[lindex $triplet 0] Cell=[lindex $triplet 1] Pin=[lindex $triplet 2]"
 	incr ncnum
     }
     close $ffill
