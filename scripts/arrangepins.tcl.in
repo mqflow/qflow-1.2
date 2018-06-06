@@ -257,8 +257,10 @@ set layernames [dict keys $layersrec]
 # the values for the highest layer for which each one is defined.
 
 for {set i 0} {$i < [llength $layernames]} {incr i} {
-   catch {dict get $layerrec xpitch}
-   catch {dict get $layerrec ypitch}
+   set layername [lindex $layernames $i]
+   set layerrec [dict get $layersrec $layername]
+   catch {set xpitch [dict get $layerrec xpitch]}
+   catch {set ypitch [dict get $layerrec ypitch]}
 }
 
 # Now run backwards, so that each layer gets xpitch and ypitch
@@ -266,14 +268,14 @@ for {set i 0} {$i < [llength $layernames]} {incr i} {
 # it is not defined.
 
 for {set i [- [llength $layernames] 1]} {$i >= 0} {incr i -1} {
-   set layername [lindex $i $layernames]
-   set layerrect [dict get $layersrec $layername]
+   set layername [lindex $layernames $i]
+   set layerrec [dict get $layersrec $layername]
 
    # Get layer's xpitch and ypitch, otherwise set it to the current value.
-   if [catch {dict get $layerrec xpitch}] {
+   if [catch {set xpitch [dict get $layerrec xpitch]}] {
       dict set layerrec xpitch $xpitch
    }
-   if [catch {dict get $layerrec ypitch}] {
+   if [catch {set ypitch [dict get $layerrec ypitch]}] {
       dict set layerrec ypitch $ypitch
    }
 }
