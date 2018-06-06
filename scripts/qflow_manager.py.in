@@ -913,7 +913,6 @@ class QflowManager(ttk.Frame):
         # Make a copy of the .magicrc file for startup with some
         # layout commands running automatically at startup.
 
-        self.print("Diagnostic 1")
         self.update_idletasks()
 
         if os.path.isfile(ldir + '/.magicrc'):
@@ -964,7 +963,6 @@ class QflowManager(ttk.Frame):
         # creates the prefs.json file and exposes the known entries
         # is on the to-do list.
 
-        self.print("Diagnostic 2")
         self.update_idletasks()
 
         if not self.magicgtype:
@@ -984,7 +982,6 @@ class QflowManager(ttk.Frame):
                 #     self.magicgtype = 'OGL'
                 #     break
 
-        self.print("Diagnostic 3")
         self.update_idletasks()
 
         if not self.magicversion:
@@ -995,7 +992,6 @@ class QflowManager(ttk.Frame):
             self.magicversion = magicpair[0].splitlines()[0]
             self.print('Magic version is ' + self.magicversion)
 
-        self.print("Diagnostic 4")
         self.update_idletasks()
 
         # Run magic interactively until the user exits.
