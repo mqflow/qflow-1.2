@@ -234,10 +234,10 @@ else
       else
 	 set fillers = ",${decapcell},"
       endif
-      set fillcell = ${decapcell}
+      set fillcell = "${decapcell}"
    else if ("x$antennacell" != "x") then
       set fillers = ",,${antennacell}"
-      set fillcell = ${antennacell}
+      set fillcell = "${antennacell}"
    else
       # There is no fill cell, which is likely to produce poor results.
       echo "Warning:  No fill cell types are defined in the tech setup script."
@@ -437,7 +437,7 @@ if ($makedef == 1) then
    endif
 
    if ( !( ${?place2def_options} )) then
-      set place2def_options = $antenna_opt
+      set place2def_options = "$antenna_opt"
    else
       set place2def_options = "$antenna_opt $place2def_options"
    endif

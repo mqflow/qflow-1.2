@@ -2520,8 +2520,8 @@ class QflowManager(ttk.Frame):
                     for pin in pinpair:
                         # Avoid flagging global vs. local names, e.g., "gnd" vs. "gnd!,"
                         # and ignore case when comparing pins.
-                        pin0 = re.sub('(.+)!', '\g<1>', pin[0].lower())
-                        pin1 = re.sub('(.+)!', '\g<1>', pin[1].lower())
+                        pin0 = re.sub('!$', '', pin[0].lower())
+                        pin1 = re.sub('!$', '', pin[1].lower())
                         if pin0 != pin1:
                             failures += 1
                             pinfail += 1

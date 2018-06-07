@@ -68,7 +68,7 @@ endif
 # qrouter output.
 
 if (! ${?qrouter_options} ) then
-   set qrouter_options = ${options}
+   set qrouter_options = "${options}"
 endif
 
 if (! ${?route_show} ) then
@@ -236,7 +236,7 @@ if (${scripting} == "T") then
 		|& tee -a ${synthlog}
       echo "  ${synthdir}/${rootname}.spc ${synthdir}/${rootname}.anno.v" \
 		|& tee -a ${synthlog}
-      echo "  ${synthdir}/${rootname}.anno ${spicepath} ${synthdir}/${rootname}_powerground" \
+      echo "  ${synthdir}/${rootname}.anno.spc ${spicepath} ${synthdir}/${rootname}_powerground" \
 		|& tee -a ${synthlog}
       ${scriptdir}/annotate.tcl antenna.out \
 		${synthdir}/${rootname}.rtlnopwr.v \
