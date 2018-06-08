@@ -373,43 +373,54 @@ dict for {pinname pinrec} $pinsrec {
 }
 
 if [catch {set layerspec [dict get $layersrec $leftlayer]}] {
+    # Left and right sides unoccupied---set to a placeholder value
+    set leftpitch 1
+} else {
     set leftpitch [dict get $layerspec ypitch]
     # (Not used)
     set leftslots [/ [- $pinury $pinlly] $leftpitch]
     set leftbottrack [/ $pinlly $leftpitch]
-} else {
-    # Left and right sides unoccupied---set to a placeholder value
-    set leftpitch 1
 }
 
 if [catch {set layerspec [dict get $layersrec $rightlayer]}] {
+    # Left and right sides unoccupied---set to a placeholder value
+    set rightpitch 1
+} else {
     set rightpitch [dict get $layerspec ypitch]
     # (Not used)
     set rightslots [/ [- $pinury $pinlly] $rightpitch]
     set rightbottrack [/ $pinlly $rightpitch]
-} else {
-    # Left and right sides unoccupied---set to a placeholder value
-    set rightpitch 1
 }
 
 if [catch {set layerspec [dict get $layersrec $botlayer]}] {
+    # Top and bottom sides unoccupied---set to a placeholder value
+    set botpitch 1
+} else {
     set botpitch [dict get $layerspec xpitch]
     # (Not used)
     set botslots [/ [- $pinurx $pinllx] $botpitch]
     set botlefttrack [/ $pinllx $botpitch]
-} else {
-    # Top and bottom sides unoccupied---set to a placeholder value
-    set botpitch 1
 }
 
 if [catch {set layerspec [dict get $layersrec $toplayer]}] {
+    # Top and bottom sides unoccupied---set to a placeholder value
+    set toppitch 1
+} else {
     set toppitch [dict get $layerspec xpitch]
     # (Not used)
     set topslots [/ [- $pinurx $pinllx] $toppitch]
     set toplefttrack [/ $pinllx $toppitch]
-} else {
-    # Top and bottom sides unoccupied---set to a placeholder value
-    set toppitch 1
+}
+
+# Diagnostic
+if $debug {
+    puts stdout "Slot pitches:"
+    puts stdout ""
+    puts stdout "Left   = $leftpitch"
+    puts stdout "Right  = $rightpitch"
+    puts stdout "Top    = $toppitch"
+    puts stdout "Bottom = $botpitch"
+    puts stdout ""
 }
 
 #--------------------------------------------------------------------
@@ -874,6 +885,8 @@ for {set i 0} {$i < $iterations} {incr i} {
 	    }
 	    set newentry [lreplace $here 1 3 $newval $rangel [+ $rangeu 4]]
 	    set testtoprow [lreplace $testtoprow $j $j $newentry]
+	} else {
+	    set newval $curval
 	}
 
         # Check for power post conflicts and move up if needed
@@ -887,7 +900,7 @@ for {set i 0} {$i < $iterations} {incr i} {
 
 	    # Move everything above further up if needed.
 	    set nval [+ $newval 2]
-	    for {set k [+ $j 1]} {$k < $topmax} {incr k} {
+	    for {set k [+ $j 1]} {$k < [llength $testtoprow]} {incr k} {
 		set above [lindex $testtoprow $k]
 	        set aval [lindex $above 1]
 		if {$aval >= $nval} {
@@ -961,6 +974,8 @@ for {set i 0} {$i < $iterations} {incr i} {
 	    }
 	    set newentry [lreplace $here 1 3 $newval $rangel [+ $rangeu 4]]
 	    set testbotrow [lreplace $testbotrow $j $j $newentry]
+	} else {
+	    set newval $curval
 	}
 
         # Check for power post conflicts and move up if needed
@@ -974,7 +989,7 @@ for {set i 0} {$i < $iterations} {incr i} {
 
 	    # Move everything above further up if needed.
 	    set nval [+ $newval 2]
-	    for {set k [+ $j 1]} {$k < $botmax} {incr k} {
+	    for {set k [+ $j 1]} {$k < [llength $testbotrow]} {incr k} {
 		set above [lindex $testbotrow $k]
 	        set aval [lindex $above 1]
 		if {$aval >= $nval} {
