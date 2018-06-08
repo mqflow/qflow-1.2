@@ -350,7 +350,8 @@ if $debug {
 # define available slots for pins on each side
 #-----------------------------------------------------------------
 
-# What layer is used for each side?
+# What layer is used for each side?  If one side has no pins, assume
+# it uses the same layer as the opposite side.
 
 dict for {pinname pinrec} $pinsrec {
     set pinx [dict get $pinrec x]
@@ -358,34 +359,58 @@ dict for {pinname pinrec} $pinsrec {
     set pinl [dict get $pinrec layer]
     if {$pinx == $pinllx} {
 	set leftlayer $pinl
+	if [catch {set rightlayer}] {set rightlayer $pinl}
     } elseif {$pinx == $pinurx} {
 	set rightlayer $pinl
+	if [catch {set leftlayer}] {set leftlayer $pinl}
     } elseif {$piny == $pinlly} {
 	set botlayer $pinl
+	if [catch {set toplayer}] {set toplayer $pinl}
     } elseif {$piny == $pinury} {
 	set toplayer $pinl
+	if [catch {set botlayer}] {set botlayer $pinl}
     }
 }
 
-set layerspec [dict get $layersrec $leftlayer]
-set leftpitch [dict get $layerspec ypitch]
-set layerspec [dict get $layersrec $rightlayer]
-set rightpitch [dict get $layerspec ypitch]
+if [catch {set layerspec [dict get $layersrec $leftlayer]}] {
+    set leftpitch [dict get $layerspec ypitch]
+    # (Not used)
+    set leftslots [/ [- $pinury $pinlly] $leftpitch]
+    set leftbottrack [/ $pinlly $leftpitch]
+} else {
+    # Left and right sides unoccupied---set to a placeholder value
+    set leftpitch 1
+}
 
-set layerspec [dict get $layersrec $botlayer]
-set botpitch [dict get $layerspec xpitch]
-set layerspec [dict get $layersrec $toplayer]
-set toppitch [dict get $layerspec xpitch]
+if [catch {set layerspec [dict get $layersrec $rightlayer]}] {
+    set rightpitch [dict get $layerspec ypitch]
+    # (Not used)
+    set rightslots [/ [- $pinury $pinlly] $rightpitch]
+    set rightbottrack [/ $pinlly $rightpitch]
+} else {
+    # Left and right sides unoccupied---set to a placeholder value
+    set rightpitch 1
+}
 
-set topslots [/ [- $pinurx $pinllx] $toppitch]
-set botslots [/ [- $pinurx $pinllx] $botpitch]
-set leftslots [/ [- $pinury $pinlly] $leftpitch]
-set rightslots [/ [- $pinury $pinlly] $rightpitch]
+if [catch {set layerspec [dict get $layersrec $botlayer]}] {
+    set botpitch [dict get $layerspec xpitch]
+    # (Not used)
+    set botslots [/ [- $pinurx $pinllx] $botpitch]
+    set botlefttrack [/ $pinllx $botpitch]
+} else {
+    # Top and bottom sides unoccupied---set to a placeholder value
+    set botpitch 1
+}
 
-set toplefttrack [/ $pinllx $toppitch]
-set botlefttrack [/ $pinllx $botpitch]
-set leftbottrack [/ $pinlly $leftpitch]
-set rightbottrack [/ $pinlly $rightpitch]
+if [catch {set layerspec [dict get $layersrec $toplayer]}] {
+    set toppitch [dict get $layerspec xpitch]
+    # (Not used)
+    set topslots [/ [- $pinurx $pinllx] $toppitch]
+    set toplefttrack [/ $pinllx $toppitch]
+} else {
+    # Top and bottom sides unoccupied---set to a placeholder value
+    set toppitch 1
+}
 
 #--------------------------------------------------------------------
 # Place existing pins in rows, either left to right or bottom to top
@@ -495,13 +520,12 @@ foreach entry $botrow {
 }
 
 set topmax [/ $pinurx $toppitch]
-set botmax [/ $pinurx $botpitch]
-set leftmax [/ $pinury $leftpitch]
-set rightmax [/ $pinury $rightpitch]
-
 set topmin [/ $pinllx $toppitch]
+set botmax [/ $pinurx $botpitch]
 set botmin [/ $pinllx $botpitch]
+set leftmax [/ $pinury $leftpitch]
 set leftmin [/ $pinlly $leftpitch]
+set rightmax [/ $pinury $rightpitch]
 set rightmin [/ $pinlly $rightpitch]
 
 if $debug {
