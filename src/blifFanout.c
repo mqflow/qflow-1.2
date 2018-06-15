@@ -46,6 +46,11 @@
  * Update 5/7/2018:
  *	Separated clock buffers from other buffers.  Identify clock inputs
  *	on flops and latches and trace back to a common clock pin or pins.
+ *
+ * Update 6/15/2018:
+ *	Finally got around to doing dynamic string allocation on the input,
+ *	which avoids issues of having I/O lines that are arbitrarily long
+ *	crashing the program.
  *---------------------------------------------------------------------------
  *
  * Revision 1.3  2008/09/09 21:24:30  steve_beccue
@@ -70,7 +75,7 @@
 
 #define  FALSE	     0
 #define  TRUE        1
-#define  MAXLINE     16384
+#define  MAXLINE     512
 
 char *Inputfname;
 char *Outputfname;
@@ -246,6 +251,7 @@ int main (int argc, char *argv[])
 {
    int i, j, k;
    int state;
+   int maxline, curline;
    int inputcount;
    int gateinputs;
    int gatecount;
@@ -256,7 +262,7 @@ int main (int argc, char *argv[])
    char *test;
    char *s, *t, *comptr;
    FILE *infptr, *outfptr;
-   char line[MAXLINE];
+   char *line;
    struct Gatelist *gl = NULL;
    struct Nodelist *nl = NULL, *nlmax, *nlimax;
    struct Drivelist *dl = NULL;
@@ -499,8 +505,19 @@ int main (int argc, char *argv[])
 
    pinname = (char *)malloc(1);
    state = NONE;
-   while ((s = fgets(line, MAXLINE, infptr)) != NULL) {
-      t = strtok(s, " \t=\n");
+   maxline = MAXLINE;
+   line = (char *)malloc(MAXLINE * sizeof(char));
+   while ((s = fgets(line, maxline, infptr)) != NULL) {
+      curline = strlen(line);
+      while (curline >= (maxline - 1)) {
+	 maxline += MAXLINE;
+	 line = (char *)realloc(line, maxline * sizeof(char));
+	 s = fgets(line + curline, (maxline - curline), infptr);
+	 curline = strlen(line);
+	 if (s == NULL) break;
+      }
+      if (s == NULL) break;
+      t = strtok(line, " \t=\n");
       while (t) {
 	 switch (state) {
 	    case GATENAME:
@@ -728,7 +745,7 @@ void read_ignore_file(char *ignore_file_name)
 {
    struct Nodelist *nl;
    FILE *ignorefptr;
-   char line[MAXLINE];
+   char line[MAXLINE];	/* One net per line, should not need dynamic allocation */
    char *s, *sp;
 
    if (!(ignorefptr = fopen(ignore_file_name, "r"))) {
@@ -1040,14 +1057,15 @@ void shownodes(void)
 void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 {
    char *s, *t;
-   char line[MAXLINE];
-   char inputline[MAXLINE];
+   char *line;
+   char *inputline;
    char bufferline[MAXLINE];
    char nodename[MAXLINE];
    char *gateline;
    char *stren, *orig;
    int  firstseen;
    int  state, i;
+   int  maxline, curline;
    int  gateinputs;
    int  pincount;
    int  needscorrecting;
@@ -1077,9 +1095,23 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
    gateline = (char *)malloc(1);
    gateline[0] = '\0';
 
-   while ((s = fgets(line, MAXLINE, infptr)) != NULL) {
-      strcpy(inputline, s);		// save this for later
-      t = strtok(s, " \t=\n");
+   maxline = MAXLINE;
+   line = (char *)malloc(MAXLINE * sizeof(char));
+   inputline = (char *)malloc(MAXLINE * sizeof(char));
+
+   while ((s = fgets(line, maxline, infptr)) != NULL) {
+      curline = strlen(line);
+      while (curline >= (maxline - 1)) {
+	 maxline += MAXLINE;
+	 line = (char *)realloc(line, maxline * sizeof(char));
+	 inputline = (char *)realloc(inputline, maxline * sizeof(char));
+	 s = fgets(line + curline, (maxline - curline), infptr);
+	 curline = strlen(line);
+	 if (s == NULL) break;
+      }
+      if (s == NULL) break;
+      strcpy(inputline, line);		// save this for later
+      t = strtok(line, " \t=\n");
       while (t) { 
 	 switch (state) {
 	    case GATENAME:
