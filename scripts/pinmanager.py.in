@@ -322,7 +322,6 @@ class PinManager(tkinter.Toplevel):
         # Get the width of the padlist frame
         # pwidth = self.canvas.itemcget("padlist", "width")
         pwidth = self.padlist.winfo_width()
-        print("Padlist width = " + str(pwidth))
         self.canvas.coords("core", int(pwidth) + 10, 200, int(pwidth) + 210, 400)
    
     # Update the canvas scrollregion to incorporate all the interior windows
@@ -383,6 +382,15 @@ class PinManager(tkinter.Toplevel):
                     newgroup['pins'].append(pin)
                     newgroup['fixed'].append(savefixed)
 
+            # To avoid allocation errors (X11 Pixmap, reason unknown)
+            # and to make things generally, cleaner, if the pin list
+            # is longer than 12, then condense it.
+
+            if len(newgroup['pins']) > 12:
+                newgroup['pins'] = [newgroup['pins'][0] + '...' + newgroup['pins'][-1]]
+                newgroup['fixed'] = [newgroup['fixed'][0]]
+                newgroup['compressed'] = True
+
             print('newgroup pins = ' + str(len(newgroup['pins'])))
             print('newgroup fixed = ' + str(len(newgroup['fixed'])))
         # Redraw
@@ -402,6 +410,7 @@ class PinManager(tkinter.Toplevel):
         newgroup = {}
         newgroup['pins'] = []
         newgroup['fixed'] = []
+        newgroup['compressed'] = False
         newgroup['name'] = group_name
         newgroup['sides'] = 'LRTB'
         newgroup['start'] = 0
@@ -614,6 +623,14 @@ class PinManager(tkinter.Toplevel):
                         
                 loaded = True
 
+                # Compress long groups, mostly to avoid tkinter pixmap allocation
+                # error.
+                for group in self.padgroups:
+                    if len(group['pins']) > 12:
+                        group['pins'] = [group['pins'][0] + '...' + group['pins'][-1]]
+                        group['fixed'] = [group['fixed'][0]]
+                        group['compressed'] = True
+
         if not loaded:
             if bliffile == None:
                 print("No BLIF or .cel2 file, cannot continue with pin assignment!", file=sys.stderr)
@@ -701,7 +718,54 @@ class PinManager(tkinter.Toplevel):
 
                     print('Writing group ' + group['name'])
                     # while writing output, ignore empty groups
-                    if len(group['pins']) > 0:
+                    if group['compressed'] == True:
+                        del1rex = re.compile('([^<]+)[<]([0-9]+)[>]\.\.\.[^<]+[<]([0-9]+)[>]')
+                        del2rex = re.compile('([^\[]+)[\[]([0-9]+)[\]]\.\.\.[^\[]+[\[]([0-9]+)[\]]')
+                        del3rex = re.compile('([^\(]+)[\(]([0-9]+)[\)]\.\.\.[^\(]+[\(]([0-9]+)[\)]')
+                        pin = group['pins'][0]
+                        fixed = group['fixed'][0]
+                        dmatch1 = del1rex.match(pin)
+                        dmatch2 = del2rex.match(pin)
+                        dmatch3 = del3rex.match(pin)
+                        if dmatch1:
+                            rootname = dmatch1.group(1)
+                            startval = int(dmatch1.group(2))
+                            endval = int(dmatch1.group(3))
+                            ds = '<'
+                            de = '>'
+                        elif dmatch2:
+                            rootname = dmatch2.group(1)
+                            startval = int(dmatch2.group(2))
+                            endval = int(dmatch2.group(3))
+                            ds = '['
+                            de = ']'
+                        elif dmatch3:
+                            rootname = dmatch3.group(1)
+                            startval = int(dmatch3.group(2))
+                            endval = int(dmatch3.group(3))
+                            ds = '('
+                            de = ')'
+                        else:
+                            continue
+
+                        print('padgroup ' + group['name'] + ' ' + group['permute'], file=ofile)
+                        if startval < endval:
+                            for j in range(startval,endval + 1):
+                                pin = rootname + ds + str(j) + de
+                                print('twpin_' + pin + '  ' + fixed, file=ofile)
+                        else:
+                            for j in range(startval,endval - 1, -1):
+                                pin = rootname + ds + str(j) + de
+                                print('twpin_' + pin + '  ' + fixed, file=ofile)
+                        if group['sides'] != '':
+                            print('restrict side ' + group['sides'], file=ofile)
+                        if group['start'] != 0 or group['stop'] != 100:
+                            fstart = str(group['start'] / 100.0)
+                            fstop = str(group['stop'] / 100.0)
+                            print('sidespace ' + fstart + ' ' + fstop, file=ofile)
+                        print('', file=ofile)
+
+                    elif len(group['pins']) > 0:
                         print('padgroup ' + group['name'] + ' ' + group['permute'], file=ofile)
                         for pin, fixed in zip(group['pins'], group['fixed']):
                             print('twpin_' + pin + '  ' + fixed, file=ofile)
