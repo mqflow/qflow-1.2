@@ -278,6 +278,9 @@ for {set i [- [llength $layernames] 1]} {$i >= 0} {incr i -1} {
    if [catch {set ypitch [dict get $layerrec ypitch]}] {
       dict set layerrec ypitch $ypitch
    }
+
+   # Write modified entry back to master dictionary
+   dict set layersrec $layername $layerrec
 }
 
 close $fdef
