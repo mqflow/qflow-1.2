@@ -2306,13 +2306,14 @@ class QflowManager(ttk.Frame):
         gdsfiles = []
         gdsfile = None
         with open(pdkscript, 'r') as ifile:
-            gdsrex = re.compile('set gdsfile=([^\t\n;]+)')
+            gdsrex = re.compile('set gdsfile=\"?([^\t\n\";]+)')
             shtext = ifile.read()
             shlines = shtext.splitlines()
             for line in shlines:
                 lmatch = gdsrex.match(line)
                 if lmatch:
-                    gdsfile = lmatch.group(1)
+                    # Remove any comment from the end of the line
+                    gdsfile = re.sub(' +#.*$', '', lmatch.group(1))
                     break
 
         if gdsfile:
