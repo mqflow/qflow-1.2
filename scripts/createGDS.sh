@@ -50,12 +50,16 @@ if (-f project_vars.sh) then
 endif
 
 # Prepend techdir to gdsfile unless gdsfile begins with "/"
-set abspath=`echo ${gdsfile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set gdspath=${gdsfile}
-else
-   set gdspath=${techdir}/${gdsfile}
-endif
+set gdspath=""
+foreach f (${gdsfile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${f}
+   else
+      set p=${techdir}/${f}
+   endif
+   set gdspath="${gdspath} $p"
+end
 
 # Prepend techdir to techfile unless techfile begins with "/"
 set abspath=`echo ${techfile} | cut -c1`
@@ -80,13 +84,18 @@ cd ${layoutdir}
 # Use magic version 8.0 to make nice labels
 #---------------------------------------------------
 
+set gdsreadcmd=""
+foreach f (${gdspath})
+   set gdsreadcmd="${gdsreadcmd}; gds read ${f}"
+end
+
 ${bindir}/magic -dnull -noconsole -T ${techpath} <<EOF
 drc off
 box 0 0 0 0
 snap int
 gds readonly true
 gds rescale false
-gds read ${gdspath}
+${gdsreadcmd}
 def read ${rootname}
 gds write ${rootname}
 quit -noprompt

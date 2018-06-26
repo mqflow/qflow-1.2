@@ -906,9 +906,9 @@ class QflowManager(ttk.Frame):
             leffiles = self.get_project_leffiles()
 
         # Pick up GDS files from the technology .sh file
-        gdsfile = None
+        gdsfiles = None
         if laystate == 'gds':
-            gdsfile = self.get_project_gdsfile()
+            gdsfiles = self.get_project_gdsfiles()
 
         # Make a copy of the .magicrc file for startup with some
         # layout commands running automatically at startup.
@@ -931,7 +931,7 @@ class QflowManager(ttk.Frame):
                 print('drc off', file=ofile)
                 for leffile in leffiles:
                     print('lef read ' + leffile, file=ofile)
-                if gdsfile:
+                for gdsfile in gdsfiles:
                     print('gds read ' + gdsfile, file=ofile)
                 if laystate == 'gds':
                     print('load gds_top', file=ofile)
@@ -2297,15 +2297,16 @@ class QflowManager(ttk.Frame):
     # Pick up GDS file from the technology .sh file
     # Note that there needs to be a way to handle multiple GDS files. . .
 
-    def get_project_gdsfile(self):
+    def get_project_gdsfiles(self):
         global qflow_bin_dir
 
         pdkdir = os.path.realpath(self.pdkdir)
         pdkscript = pdkdir + '/' + self.pdknode.get() + '.sh'
 
+        gdsfiles = []
         gdsfile = None
         with open(pdkscript, 'r') as ifile:
-            gdsrex = re.compile('set gdsfile=([^ \t\n;]+)')
+            gdsrex = re.compile('set gdsfile=([^\t\n;]+)')
             shtext = ifile.read()
             shlines = shtext.splitlines()
             for line in shlines:
@@ -2314,16 +2315,19 @@ class QflowManager(ttk.Frame):
                     gdsfile = lmatch.group(1)
                     break
 
-        if not gdsfile:
+        if gdsfile:
+            for f in gdsfile.split():
+                gdsfiles.append(pdkdir + '/' + f)
+
+        if gdsfiles == []:
             # Fallback measure in case of no entry in the script file:
             # Select any .gds file in the tech directory.
             pdkfiles = os.listdir(pdkdir)
             for pdkfile in pdkfiles:
                 if os.path.splitext(pdkfile)[1] == '.gds':
-                    gdsfile = pdkdir + '/' + pdkfile
-                    break
+                    gdsfiles.append(pdkdir + '/' + pdkfile)
 
-        return pdkdir + '/' + gdsfile
+        return gdsfiles
 
     # Pick up LEF files from the project .cfg file
     def get_project_leffiles(self):
@@ -2700,10 +2704,11 @@ class QflowManager(ttk.Frame):
                 drcproc.stdin.write("lef read " + leffile + "\n")
         else:
             # Use the GDS view of the standard cells
-            gdsfile = self.get_project_gdsfile()
+            gdsfiles = self.get_project_gdsfiles()
             drcproc.stdin.write("gds readonly true\n")
             drcproc.stdin.write("gds rescale false\n")
-            drcproc.stdin.write("gds read " + gdsfile + "\n")
+            for gdsfile in gdsfiles:
+                drcproc.stdin.write("gds read " + gdsfile + "\n")
 
         drcproc.stdin.write("load " + self.project + "\n")
 
@@ -2773,7 +2778,7 @@ class QflowManager(ttk.Frame):
         mag_path = self.layoutdir
 
         # Pick up GDS files from the technology .sh file
-        gdsfile = self.get_project_gdsfile()
+        gdsfiles = self.get_project_gdsfiles()
 
         gdsproc = subprocess.Popen(['magic', '-dnull', '-noconsole'],
 		stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr=subprocess.PIPE,
@@ -2783,7 +2788,8 @@ class QflowManager(ttk.Frame):
         gdsproc.stdin.write("box 0 0 0 0\n")
         gdsproc.stdin.write("gds readonly true\n")
         gdsproc.stdin.write("gds rescale false\n")
-        gdsproc.stdin.write("gds read " + gdsfile + "\n")
+        for gdsfile in gdsfiles:
+            gdsproc.stdin.write("gds read " + gdsfile + "\n")
         gdsproc.stdin.write("load " + self.project + "\n")
         gdsproc.stdin.write("expand\n")
         gdsproc.stdin.write("select top cell\n")
