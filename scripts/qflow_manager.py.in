@@ -906,7 +906,7 @@ class QflowManager(ttk.Frame):
             leffiles = self.get_project_leffiles()
 
         # Pick up GDS files from the technology .sh file
-        gdsfiles = None
+        gdsfiles = []
         if laystate == 'gds':
             gdsfiles = self.get_project_gdsfiles()
 

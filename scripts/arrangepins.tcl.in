@@ -451,10 +451,37 @@ dict for {pinname pinrec} $pinsrec {
     } elseif {$piny == $pinury} {
 	lappend toprow [list $pinname [/ $pinx $toppitch]]
     } else {
-	puts stderr "Warning!  Pin $pinname did not match any border position!"
-	puts stderr "Pin area bounds are ($pinllx $pinlly) to ($pinurx $pinury)"
-	puts stderr "Pin $pinname position is ($pinx $piny)"
-	puts stderr ""
+	# Check against DIEAREA bounds.  Determine whether to adjust pin bounds
+        # to match the DIEAREA bound.  This corrects for problems where the
+	# placement tool puts pins out-of-bounds.  Arrangepins will pull them
+	# back in.
+
+	if {$pinx <= $diellx} {
+	    lappend leftrow [list $pinname [/ $piny $leftpitch]]
+	    if {$pinx > $pinllx} {
+		set pinllx $pinx
+	    }
+	} elseif {$pinx >= $dieurx} {
+	    lappend rightrow [list $pinname [/ $piny $rightpitch]]
+	    if {$pinx < $pinurx} {
+		set pinurx $pinx
+	    }
+	} elseif {$piny <= $dielly} {
+	    lappend botrow [list $pinname [/ $pinx $botpitch]]
+	    if {$piny > $pinlly} {
+		set pinlly $piny
+	    }
+	} elseif {$piny >= $dieury} {
+	    lappend toprow [list $pinname [/ $pinx $toppitch]]
+	    if {$piny < $pinury} {
+		set pinury $piny
+	    }
+	} else {
+	    puts stderr "Warning!  Pin $pinname did not match any border position!"
+	    puts stderr "Pin area bounds are ($pinllx $pinlly) to ($pinurx $pinury)"
+	    puts stderr "Pin $pinname position is ($pinx $piny)"
+	    puts stderr ""
+	}
     }
 }
 
