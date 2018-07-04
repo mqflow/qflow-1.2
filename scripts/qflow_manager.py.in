@@ -2568,11 +2568,29 @@ class QflowManager(ttk.Frame):
         # Set timeout accordingly.  Allow 3 minutes per MB for timeout.
         try:
             statbuf = os.stat(mag_path + '/' + self.project + '.mag')
+            magmtime = statbuf.st_mtime
         except:
             mtimeout = 600
+            magmtime = -1 
         else:
             mtimeout = round(180 * statbuf.st_size / 1000000)
 
+        # Quick bypass method:  if .ext file and netlist file exist and
+        # post-date the layout, then skip the extraction.  This works around
+        # the timeout issue.  Ultimately this needs to be solved by creating
+        # a "qflow lvs" method for the qflow command-line.
+
+        try:
+            statbuf = os.stat(mag_path + '/' + self.project + '.ext')
+            extmtime = statbuf.st_mtime
+            statbuf = os.stat(lay_path + '/' + self.project + '.spi')
+            spimtime = statbuf.st_mtime
+        except:
+            skipextract = False
+        else:
+            if (magmtime > 0) and (magmtime < extmtime) and (magmtime < spimtime):
+                skipextract = True
+      
         # Extract layout netlist from layout
         self.print('Extracting netlist from layout')
         mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-dnull', '-noconsole'],
@@ -2588,17 +2606,24 @@ class QflowManager(ttk.Frame):
         mproc.stdin.write("load " + self.project + "\n")
         mproc.stdin.write("select top cell\n")
         mproc.stdin.write("expand\n")
-        mproc.stdin.write("extract all\n")
-        mproc.stdin.write("ext2spice hierarchy on\n")
-        mproc.stdin.write("ext2spice format ngspice\n")
-        mproc.stdin.write("ext2spice scale off\n")
-        mproc.stdin.write("ext2spice renumber off\n")
-        mproc.stdin.write("ext2spice cthresh infinite\n")
-        mproc.stdin.write("ext2spice rthresh infinite\n")
-        mproc.stdin.write("ext2spice blackbox on\n")
-        mproc.stdin.write("ext2spice -o " + lay_path + "/" + self.project + ".spi\n")
+        if not skipextract:
+            mproc.stdin.write("extract all\n")
+            mproc.stdin.write("ext2spice hierarchy on\n")
+            mproc.stdin.write("ext2spice format ngspice\n")
+            mproc.stdin.write("ext2spice scale off\n")
+            mproc.stdin.write("ext2spice renumber off\n")
+            mproc.stdin.write("ext2spice cthresh infinite\n")
+            mproc.stdin.write("ext2spice rthresh infinite\n")
+            mproc.stdin.write("ext2spice blackbox on\n")
+            mproc.stdin.write("ext2spice -o " + lay_path + "/" + self.project + ".spi\n")
         mproc.stdin.write("quit -noprompt\n")
-        magicpair = mproc.communicate(timeout=mtimeout)
+
+        try:
+            magicpair = mproc.communicate(timeout=mtimeout)
+        except subprocess.TimeoutExpired:
+            self.print('Extraction timeout.  Need to wait for netlist to be generated.')
+            self.toppane.checklist.lvs_result.configure(text="(incomplete)")
+            return
 
         # Remove the .ext files left behind by the extraction
         for file in os.listdir(mag_path):
@@ -3401,8 +3426,14 @@ class QflowManager(ttk.Frame):
             # Set the verilog source
             self.set_verilog(self.verilog)
 
+            # Read from the project_vars.sh file
+            self.read_project_vars(remove = False)
+
             # Find what status the project is in and set the status accordingly
             self.qflow_get_status()
+
+            # Read from the project .par file to get GUI settings
+            self.read_par_file(remove = False)
 
             # Set the GUI state to match the status
             self.gui_set_status()
