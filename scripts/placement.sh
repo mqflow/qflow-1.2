@@ -727,19 +727,19 @@ if ($makedef == 1) then
       #------------------------------------------------------------------
 
       if ( !( -f ${rootname}.rtl.v || \
-		( -M ${rootname}.rtl.v < -M ${rootname}.blif ))) then
+		( -M ${rootname}.rtl.v < -M ${rootname}_anno.blif ))) then
 	 echo "blif2Verilog failure:  No file ${rootname}.rtl.v created." \
 		|& tee -a ${synthlog}
       endif
 
       if ( !( -f ${rootname}.rtlnopwr.v || \
-		( -M ${rootname}.rtlnopwr.v < -M ${rootname}.blif ))) then
+		( -M ${rootname}.rtlnopwr.v < -M ${rootname}_anno.blif ))) then
 	 echo "blif2Verilog failure:  No file ${rootname}.rtlnopwr.v created." \
 		|& tee -a ${synthlog}
       endif
 
       if ( !( -f ${rootname}.spc || \
-		( -M ${rootname}.spc < -M ${rootname}.blif ))) then
+		( -M ${rootname}.spc < -M ${rootname}_anno.blif ))) then
 	 echo "blif2BSpice failure:  No file ${rootname}.spc created." \
 		|& tee -a ${synthlog}
       endif

@@ -1176,7 +1176,7 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 	       }
 	       gl = (struct Gatelist *)HashLookup(t, Gatehash);
 	       if (gl == NULL) {
-		  fprintf(stderr, "Fatal error:  Gate \"%s\" is used in source "
+		  fprintf(stderr, "Error:  Gate \"%s\" is used in source "
 			"but has no liberty file definition.\n", t);
 		  fprintf(stderr, "Check if gate is designated \"dont_use\".\n");
 		  gateinputs = 0;

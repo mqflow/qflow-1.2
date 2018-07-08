@@ -685,7 +685,7 @@ if [catch {open fillcells.txt w} ffill] {
    foreach fillinst $fillinsts {
       set instname [lindex $fillinst 0]
       set cellname [lindex $fillinst 1]
-      if {$cellname == $antennacell} {
+      if {[string first $antennacell $cellname] == 0} {
 	 # Note:  Only the antenna cell should have a pin (other than power/ground)
          puts $ffill "Net=$ncnet$ncnum Instance=$instname Cell=$cellname Pin=$antennapin"
       } else {
