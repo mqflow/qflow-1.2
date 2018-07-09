@@ -42,6 +42,8 @@ set topname [file rootname [lindex $argv $argidx]]
 set defname ${topname}.def
 set defoutname ${topname}_mod.def
 
+set infoname ${topname}.info
+
 set units 100           ;# write centimicron units into the DEF file (default)
 
 #-----------------------------------------------------------------
@@ -53,10 +55,39 @@ if [catch {open $defname r} fdef] {
     return
 }
 
+# The .info file is optional;  get track pitch and width information
+# for each layer.
+
+set layersrec [dict create]
+
+if {![catch {open $infoname r} finfo]} {
+    puts stdout "Reading info file ${infoname}. . ."
+    while {[gets $finfo line] >= 0} {
+	if [regexp {[ \t]*#} $line lmatch] {
+            continue
+	} elseif [regexp {[ \t]*qrouter[ \t]+([^ \t]+)} $line lmatch qversion] {
+	    continue
+	} elseif [regexp {[ \t]*([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t\n]+)} $line lmatch layername pitch offset width orient] {
+	    # Note:  Could make use of pitch information here, relying on DEF file
+	    # TRACKS section instead.
+
+	    set layerrec [dict create]
+	    if {$orient == "vertical"} {
+		dict set layerrec xpitch $pitch
+	    } else {
+		dict set layerrec ypitch $pitch
+	    }
+	    dict set layerrec offset $offset
+	    dict set layerrec width $width
+	    dict set layersrec $layername $layerrec
+	}
+    }
+    close $finfo
+}
+
 puts stdout "Reading DEF file ${defname}. . ."
 flush stdout
 
-set layersrec [dict create]
 set pinsrec [dict create]
 set specialrec [dict create]
 set compsrec [dict create]
@@ -229,7 +260,11 @@ while {[gets $fdef line] >= 0} {
 	}
     } else {
 	if [regexp {[ \t]*TRACKS[ \t]+([XY])[ \t]+[^ \t]+[ \t]+DO[ \t]+[^ \t]+[ \t]+STEP[ \t]+([^ \t]+)[ \t]+LAYER[ \t]+([^ \t;]+)[ \t]*;} $line lmatch orient pitch layer] {
-	    set layerrec [dict create]
+	    if {[dict exists $layersrec $layer]} {
+		set layerrec [dict get $layersrec $layer]
+	    } else {
+		set layerrec [dict create]
+	    }
 	    if {$orient == "X"} {
 		dict set layerrec xpitch $pitch
 	    } else {
@@ -1139,6 +1174,7 @@ while {[gets $fdef line] >= 0} {
 	    set lly [dict get $pinrec lly]
 	    set urx [dict get $pinrec urx]
 	    set ury [dict get $pinrec ury]
+
 	    set pinx [dict get $pinrec x]
 	    set piny [dict get $pinrec y]
 	    set pino [dict get $pinrec o]
@@ -1153,6 +1189,20 @@ while {[gets $fdef line] >= 0} {
 	    set lly [dict get $pinrec lly]
 	    set urx [dict get $pinrec urx]
 	    set ury [dict get $pinrec ury]
+	    if {$llx == 0 && $urx == 1 && $lly == 0 && $ury == 1} {
+		# Change unit size pins to be a square of the route
+		# width.  This prevents unconnected pins from losing
+		# all underlying metal when read into a layout tool.
+		set layerrec [dict get $layersrec $layer]
+		if {[dict exists $layerrec width]} {
+		    set width [dict get $layerrec width]
+		    set hwidth [expr {int([/ [* $units $width] 2])}]
+		    set llx -$hwidth
+		    set lly -$hwidth
+		    set urx  $hwidth
+		    set ury  $hwidth
+		}
+	    }
 	    set pinx [dict get $pinrec x]
 	    set piny [dict get $pinrec y]
 	    set pino [dict get $pinrec o]
