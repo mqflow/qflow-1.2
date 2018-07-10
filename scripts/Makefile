@@ -10,7 +10,7 @@ LDFLAGS =
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 27
+REVISION = 44
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin

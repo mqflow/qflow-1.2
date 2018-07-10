@@ -148,7 +148,7 @@ if ( "$techleffile" == "" ) then
     set addsoptions=""
 else
     set lefoptions="--lef ${techlefpath}"
-    set addsoptions="-techlef ${lefpath}"
+    set addsoptions="-techlef ${techlefpath}"
 endif
 set lefoptions="${lefoptions} --lef ${lefpath}"
 

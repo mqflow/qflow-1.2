@@ -708,7 +708,10 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 	    set topmet $lnum
 	}
     }
-    if {$tnum < 3} {
+    if {$tnum == 0} {
+	puts stdout "Error in metal layer definitions. . . cannot continue."
+	exit 1
+    } elseif {$tnum < 3} {
 	puts stderr "Warning:  No vertical routing layer at metal 3 or above"
 	puts stderr "Only posts will be placed, and not connected"
     }

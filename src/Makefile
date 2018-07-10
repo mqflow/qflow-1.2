@@ -3,11 +3,12 @@
 #
 
 # Main compiler arguments
-CFLAGS = -g
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\"
+CFLAGS = -g -O2
 LIBS = 
 LDFLAGS = 
 INSTALL = /bin/install -c
+
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\" -DQFLOW_VERSION=\"1.2\" -DQFLOW_REVISION=\"44\"
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_GRAYWOLF_PATH = /usr/local/bin/graywolf
@@ -39,6 +40,7 @@ blif2BSpice$(EXEEXT): blif2BSpice.o
 
 blifFanout$(EXEEXT): blifFanout.o $(HASHLIB) $(LIBERTYLIB)
 	$(CC) $(LDFLAGS) blifFanout.o $(HASHLIB) $(LIBERTYLIB) \
+		-DQFLOW_VERSION=\"VERSION\" -DQFLOW_REVISION=\"REVISION\" \
 		$(DEPENDS) -o $@ $(LIBS) -lm
 
 blif2Verilog$(EXEEXT): blif2Verilog.o
