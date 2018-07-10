@@ -47,6 +47,7 @@ set stripeoffset 0
 set numstripes 0
 set dostretch true
 set techlef ""
+set hardlef []
 set pitchx 0
 set layers {}
 set vias {}
@@ -78,6 +79,9 @@ while true {
     } elseif {$arg0 == "-techlef"} {
 	incr argidx
 	set techlef [lindex $argv $argidx]
+    } elseif {$arg0 == "-hardlef"} {
+	incr argidx
+	lappend hardlef [lindex $argv $argidx]
     } elseif {$arg0 == "-nostretch"} {
 	set dostretch false
     } else {
@@ -533,6 +537,18 @@ proc read_lef {flef fillcell} {
 if {$techlef != ""} {
     puts stdout "Reading technology LEF file ${techlef}."
     read_lef $ftech ""
+}
+
+if {[llength $hardlef] > 0} {
+    foreach leffile $hardlef {
+	puts stdout "Reading hard macro LEF file ${leffile}."
+	if [catch {open $leffile r} fhard] {
+	    puts stderr "Error: can't open LEF file $lefname for input"
+	} else {
+	    read_lef $fhard ""
+	    close $fhard
+	}
+    }
 }
 
 #-----------------------------------------------------------------

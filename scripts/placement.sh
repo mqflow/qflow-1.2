@@ -145,8 +145,10 @@ cd ${projectpath}
 
 if ( "$techleffile" == "" ) then
     set lefoptions=""
+    set addsoptions=""
 else
     set lefoptions="--lef ${techlefpath}"
+    set addsoptions="-techlef ${lefpath}"
 endif
 set lefoptions="${lefoptions} --lef ${lefpath}"
 
@@ -157,6 +159,7 @@ if ( ${?hard_macros} ) then
 	foreach file ( `ls ${sourcedir}/${macro_path}` )
 	    if ( ${file:e} == "lef" ) then
 		set lefoptions="${lefoptions} --hard-macro ${sourcedir}/${macro_path}/${file}"
+		set addsoptions="${addsoptions} -hardlef ${sourcedir}/${macro_path}/${file}"
 	    endif
 	end
     end
@@ -487,11 +490,9 @@ if ($makedef == 1) then
       # if the width options are more flexible).
 
       if ( !( ${?addspacers_options} )) then
-         set addspacers_options = ""
-      endif
-
-      if ( "$techleffile" != "" ) then
-         set addspacers_options = "-techlef ${techlefpath} ${addspacers_options}"
+         set addspacers_options = "${addsoptions}"
+      else
+         set addspacers_options = "${addsoptions} ${addspacers_options}"
       endif
 
       echo "Running addspacers to generate power stripes and align cell right edge" \
@@ -581,6 +582,17 @@ if ($makedef == 1) then
          echo "read_lef ${techlefpath}" >> ${rootname}.cfg
       endif
       echo "read_lef ${lefpath}" >> ${rootname}.cfg
+
+      if ( ${?hard_macros} ) then
+          foreach macro_path ( $hard_macros )
+	      foreach file ( `ls ${sourcedir}/${macro_path}` )
+		  if ( ${file:e} == "lef" ) then
+		      echo "read_lef ${sourcedir}/${macro_path}/${file}" >> ${rootname}.cfg
+	          endif
+	      end
+	  end
+      endif
+
       echo "catch {layers ${route_layers}}" >> ${rootname}.cfg
       if ( ${?via_use} ) then
          echo "" >> ${rootname}.cfg
@@ -604,6 +616,15 @@ if ($makedef == 1) then
          echo "lef ${techlefpath}" >> ${rootname}.cfg
       endif
       echo "lef ${lefpath}" >> ${rootname}.cfg
+      if ( ${?hard_macros} ) then
+          foreach macro_path ( $hard_macros )
+	      foreach file ( `ls ${sourcedir}/${macro_path}` )
+		  if ( ${file:e} == "lef" ) then
+		      echo "lef ${sourcedir}/${macro_path}/${file}" >> ${rootname}.cfg
+	          endif
+	      end
+	  end
+      endif
       echo "num_layers ${route_layers}" >> ${rootname}.cfg
       if ( ${?via_pattern} ) then
          echo "" >> ${rootname}.cfg
