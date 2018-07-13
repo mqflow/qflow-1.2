@@ -172,7 +172,10 @@ proc parse_port {pinname macroname leffile ox oy} {
 	    # Comment line, ignore.
 	} elseif [regexp {[ \t]*LAYER[ \t]+(.+)[\t ]*;} $line lmatch layername] {
 	    if {![regexp {.*(\d).*} $layername lmatch layernum]} {set layernum 0}
-	    set ${macroname}(${pinname},layer) $layernum
+	    # graywolf only accepts layernum 0, 1, 2, and 3
+	    if {$layernum < 4} {
+		set ${macroname}(${pinname},layer) $layernum
+	    }
 	} elseif [regexp {[ \t]*RECT[ \t]+(.+)[ \t]+(.+)[ \t]+(.+)[ \t]+(.+)[ \t]*;} \
 			$line lmatch llx lly urx ury] {
 	    set llx [expr {int($llx * $units)}]

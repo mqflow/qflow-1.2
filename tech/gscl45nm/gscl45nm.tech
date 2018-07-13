@@ -764,16 +764,16 @@ end
 
 lef
 
- routing m1	MET1 m1 met1
- routing m2	MET2 m2 met2
- routing m3	MET3 m3 met3
- routing m4	MET4 m4 met4
- routing m5	MET5 m5 met5
- routing m6	MET6 m6 met6
- routing m7	MET7 m7 met7
- routing m8	MET8 m8 met8
- routing m9	MET9 m9 met9
- routing m10	MET10 m10 met10
+ routing m1	metal1 MET1 m1 met1
+ routing m2	metal2 MET2 m2 met2
+ routing m3	metal3 MET3 m3 met3
+ routing m4	metal4 MET4 m4 met4
+ routing m5	metal5 MET5 m5 met5
+ routing m6	metal6 MET6 m6 met6
+ routing m7	metal7 MET7 m7 met7
+ routing m8	metal8 MET8 m8 met8
+ routing m9	metal9 MET9 m9 met9
+ routing m10	metal10 MET10 m10 met10
 
  cut via1 VIA1 via1 cont2 via12
  cut via2 VIA2 via2 cont3 via23
