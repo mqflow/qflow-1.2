@@ -195,7 +195,15 @@ endif
 
 if ( !( -f ${rootname}_route.def || ( -M ${rootname}_route.def \
 		< -M ${rootname}.def ))) then
-   echo "qrouter failure:  No file ${rootname}_route.def." |& tee -a ${synthlog}
+   echo "qrouter failure:  No output file ${rootname}_route.def." |& tee -a ${synthlog}
+   echo "Premature exit." |& tee -a ${synthlog}
+   echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+   exit 1
+endif
+
+if ( !( -f ${rootname}.rc || ( -M ${rootname}.rc \
+		< -M ${rootname}.def ))) then
+   echo "qrouter failure:  No delay file ${rootname}.rc." |& tee -a ${synthlog}
    echo "Premature exit." |& tee -a ${synthlog}
    echo "Synthesis flow stopped due to error condition." >> ${synthlog}
    exit 1

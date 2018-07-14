@@ -2580,13 +2580,14 @@ class QflowManager(ttk.Frame):
         # the timeout issue.  Ultimately this needs to be solved by creating
         # a "qflow lvs" method for the qflow command-line.
 
+        skipextract = False
         try:
             statbuf = os.stat(mag_path + '/' + self.project + '.ext')
             extmtime = statbuf.st_mtime
             statbuf = os.stat(lay_path + '/' + self.project + '.spi')
             spimtime = statbuf.st_mtime
         except:
-            skipextract = False
+            pass
         else:
             if (magmtime > 0) and (magmtime < extmtime) and (magmtime < spimtime):
                 skipextract = True
