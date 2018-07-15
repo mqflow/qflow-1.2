@@ -331,9 +331,16 @@ class QflowManager(ttk.Frame):
         window = self.toppane.settings.synth_settings
         window.title = ttk.Label(window, text = 'Synthesis Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
-        window.message = ttk.Label(window, style = 'normal.TLabel',
-		text = '(there are no user-configurable settings for synthesis)')
-        window.message.pack(side = 'top', fill = 'x')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after synthesis:')
+        window.stop.title.pack(side = 'left')
+        self.synth_stop = tkinter.IntVar(window.stop)
+        self.synth_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.synth_stop)
+        window.stop.check.pack(side = 'left')
 
         self.toppane.settings.place_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.place_settings
@@ -419,6 +426,16 @@ class QflowManager(ttk.Frame):
         window.gui.check = ttk.Checkbutton(window.gui, variable = self.place_graphics)
         window.gui.check.pack(side = 'left')
 
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after placement success:')
+        window.stop.title.pack(side = 'left')
+        self.place_stop = tkinter.IntVar(window.stop)
+        self.place_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.place_stop)
+        window.stop.check.pack(side = 'left')
+
         self.toppane.settings.timing_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.timing_settings
         window.title = ttk.Label(window, text = 'Static Timing Analysis Settings', style = 'title.TLabel')
@@ -433,6 +450,16 @@ class QflowManager(ttk.Frame):
         self.long_format.set(1)
         window.longformat.check = ttk.Checkbutton(window.longformat, variable = self.long_format)
         window.longformat.check.pack(side = 'left')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after STA success:')
+        window.stop.title.pack(side = 'left')
+        self.sta_stop = tkinter.IntVar(window.stop)
+        self.sta_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.sta_stop)
+        window.stop.check.pack(side = 'left')
 
         self.toppane.settings.route_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.route_settings
@@ -462,6 +489,16 @@ class QflowManager(ttk.Frame):
         window.gui.check = ttk.Checkbutton(window.gui, variable = self.route_graphics)
         window.gui.check.pack(side = 'left')
 
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after route success:')
+        window.stop.title.pack(side = 'left')
+        self.route_stop = tkinter.IntVar(window.stop)
+        self.route_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.route_stop)
+        window.stop.check.pack(side = 'left')
+
         self.toppane.settings.backanno_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.backanno_settings
         window.title = ttk.Label(window, text = 'Post-Route STA Settings', style = 'title.TLabel')
@@ -475,21 +512,45 @@ class QflowManager(ttk.Frame):
         window.longformat.check = ttk.Checkbutton(window.longformat, variable = self.long_format)
         window.longformat.check.pack(side = 'left')
 
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after post-layout STA success:')
+        window.stop.title.pack(side = 'left')
+        self.post_sta_stop = tkinter.IntVar(window.stop)
+        self.post_sta_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.post_sta_stop)
+        window.stop.check.pack(side = 'left')
+
         self.toppane.settings.migrate_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.migrate_settings
         window.title = ttk.Label(window, text = 'Migrate Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
-        window.message = ttk.Label(window, style = 'normal.TLabel',
-	 	text = '(there are no user-configurable settings for migration)')
-        window.message.pack(side = 'top')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after migration:')
+        window.stop.title.pack(side = 'left')
+        self.migrate_stop = tkinter.IntVar(window.stop)
+        self.migrate_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.migrate_stop)
+        window.stop.check.pack(side = 'left')
 
         self.toppane.settings.lvs_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.lvs_settings
         window.title = ttk.Label(window, text = 'LVS Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
-        window.message = ttk.Label(window, style = 'normal.TLabel',
-	 	text = '(there are no user-configurable settings for LVS)')
-        window.message.pack(side = 'top')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after LVS success:')
+        window.stop.title.pack(side = 'left')
+        self.lvs_stop = tkinter.IntVar(window.stop)
+        self.lvs_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.lvs_stop)
+        window.stop.check.pack(side = 'left')
 
         self.toppane.settings.drc_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.drc_settings
@@ -506,6 +567,16 @@ class QflowManager(ttk.Frame):
 
         window.gdsview.check = ttk.Checkbutton(window.gdsview, variable = self.gdsview)
         window.gdsview.check.pack(side = 'left')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after DRC success:')
+        window.stop.title.pack(side = 'left')
+        self.drc_stop = tkinter.IntVar(window.stop)
+        self.drc_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.drc_stop)
+        window.stop.check.pack(side = 'left')
 
         self.toppane.settings.gds_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.gds_settings
@@ -2464,6 +2535,8 @@ class QflowManager(ttk.Frame):
 
     def qflow_migrate(self):
         self.qflow_migrate_files(full=True)
+        if self.status == 'lvs' and self.migrate_stop.get() == 0:
+            self.qflow_lvs()
 
     def count_LVS_failures(self, filename):
         with open(filename, 'r') as cfile:
@@ -2697,6 +2770,9 @@ class QflowManager(ttk.Frame):
             self.status = 'drc'
             self.gui_set_status()
 
+        if self.status == 'drc' and self.lvs_stop.get() == 0:
+            self.qflow_drc()
+
     def qflow_drc(self):
         # Can only run DRC if LVS has been run and passed.
         status = self.toppane.checklist.lvs_result.cget('text')
@@ -2782,6 +2858,10 @@ class QflowManager(ttk.Frame):
         else:
             self.status = 'gds'
             self.gui_set_status()
+
+        if self.status == 'gds' and self.drc_stop.get() == 0:
+            self.qflow_gds()
+
         return
 
     def qflow_gds(self):
@@ -3072,6 +3152,9 @@ class QflowManager(ttk.Frame):
             self.status = 'place'
             self.gui_set_status()
 
+        if self.status == 'place' and self.synth_stop.get() == 0:
+            self.qflow_place()
+
     def done_place(self, filename, status):
         failed = False
 
@@ -3097,6 +3180,9 @@ class QflowManager(ttk.Frame):
             # Do initial migration to .mag file for checking placement layout
             self.qflow_migrate_files(full=False)
 
+        if self.status == 'timing' and self.place_stop.get() == 0:
+            self.qflow_sta()
+
     def done_timing(self, filename, status):
         failed = False
 
@@ -3118,6 +3204,9 @@ class QflowManager(ttk.Frame):
         else:
             self.status = 'route'
             self.gui_set_status()
+
+        if self.status == 'route' and self.sta_stop.get() == 0:
+            self.qflow_route()
 
     def done_route(self, filename, status):
         failed = False
@@ -3145,6 +3234,9 @@ class QflowManager(ttk.Frame):
             self.status = 'backanno'
             self.gui_set_status()
 
+        if self.status == 'backanno' and self.route_stop.get() == 0:
+            self.qflow_backanno()
+
     def done_backanno(self, filename, status):
         failed = False
 
@@ -3166,6 +3258,9 @@ class QflowManager(ttk.Frame):
         else:
             self.status = 'migrate'
             self.gui_set_status()
+
+        if self.status == 'migrate' and self.post_sta_stop.get() == 0:
+            self.qflow_migrate()
 
     def logprint(self, message, doflush=False):
         if self.logfile:
