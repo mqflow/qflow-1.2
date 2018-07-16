@@ -477,13 +477,71 @@ dict for {pinname pinrec} $pinsrec {
     set pinx [dict get $pinrec x]
     set piny [dict get $pinrec y]
     set pinl [dict get $pinrec layer]
-    if {$pinx == $pinllx} {
+
+    # If a pin has more than one match to the pin bounds, then check
+    # which side is closest to a die area bound.
+
+    set matchleft false
+    set matchright false
+    set matchtop false
+    set matchbottom false
+
+    if {$pinx <= $pinllx} {
+        set matchleft true
+    }
+    if {$pinx >= $pinurx} {
+        set matchright true
+    }
+    if {$piny <= $pinlly} {
+        set matchbottom true
+    }
+    if {$piny >= $pinury} {
+        set matchtop true
+    }
+
+    # Corner cases, so to speak.
+	
+    if {$matchleft && $matchtop} {
+	set leftdist [abs [- $diellx $pinx]]
+	set topdist [abs [- $dieury $piny]]
+	if {$topdist < $leftdist} {
+	    set matchleft false
+	} else {
+	    set matchtop false
+	}
+    } elseif {$matchleft && $matchbottom} {
+	set leftdist [abs [- $diellx $pinx]]
+	set bottomdist [abs [- $dielly $piny]]
+	if {$bottomdist < $leftdist} {
+	    set matchleft false
+	} else {
+	    set matchbottom false
+	}
+    } elseif {$matchright && $matchtop} {
+	set rightdist [abs [- $dieurx $pinx]]
+	set topdist [abs [- $dieury $piny]]
+	if {$topdist < $rightdist} {
+	    set matchright false
+	} else {
+	    set matchtop false
+	}
+    } elseif {$matchright && $matchbottom} {
+	set rightdist [abs [- $dieurx $pinx]]
+	set bottomdist [abs [- $dielly $piny]]
+	if {$bottomdist < $rightdist} {
+	    set matchright false
+	} else {
+	    set matchbottom false
+	}
+    }
+
+    if {$matchleft} {
 	lappend leftrow [list $pinname [/ $piny $leftpitch]]
-    } elseif {$pinx == $pinurx} {
+    } elseif {$matchright} {
 	lappend rightrow [list $pinname [/ $piny $rightpitch]]
-    } elseif {$piny == $pinlly} {
+    } elseif {$matchbottom} {
 	lappend botrow [list $pinname [/ $pinx $botpitch]]
-    } elseif {$piny == $pinury} {
+    } elseif {$matchtop} {
 	lappend toprow [list $pinname [/ $pinx $toppitch]]
     } else {
 	# Check against DIEAREA bounds.  Determine whether to adjust pin bounds
