@@ -80,11 +80,29 @@ if {$argc == 4} {
 } elseif {$argc == 5} {
    set scale [lindex $argv 3]
    set offset [lindex $argv 4]
+   # Check if fills were passed as a single argument, space or comma
+   # separated.  If so, this is not scale and offset.
+   if {[llength $offset] > 1} {
+      set density $scale
+      set scale 0.0
+      set fillratios $offset
+   } elseif {[llength [split $offset ,]] > 1} {
+      set density $scale
+      set scale 0.0
+      set fillratios {}
+      set tmpfillr [split $offset ,]
+      for {set i 0} {$i < [llength $tmpfillr]} {incr i} {
+         set rfill [lindex $tmpfillr $i]
+	 if {$rfill == {}} {set rfill 0}
+	 lappend fillratios $rfill
+      }
+   }
 } else {
    # For 6 or 7 arguments.  Note that there is no 5-argument syntax
    # for ratios, since if only one fill type is specified, then by
    # definition it must be 100% of the fill.
 
+   set scale 0.0
    set density [lindex $argv 3]
    for {set i 0} {$i < [expr {$argc - 4}]} {incr i} {
       lappend fillratios [lindex $argv [expr {$i + 4}]]
