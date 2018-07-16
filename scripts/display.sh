@@ -110,6 +110,19 @@ else
    set techlefcmd=""
 endif
 
+# Handle additional .lef files from the hard macros list
+
+set hardlefcmd=""
+if ( ${?hard_macros} ) then
+    foreach macro_path ( $hard_macros )
+        foreach file ( `ls ${sourcedir}/${macro_path}` )
+            if ( ${file:e} == "lef" ) then
+                set hardlefcmd="${hardlefcmd} ; lef read ${sourcedir}/${macro_path}/${file}"
+            endif
+        end
+    end
+endif
+
 # Timestamp handling:  If the .mag file is more recent
 # than the .def file, then print a message and do not
 # overwrite.
@@ -136,8 +149,9 @@ ${bindir}/magic -dnull -noconsole <<EOF
 drc off
 box 0 0 0 0
 snap int
-${lefcmd}
 ${techlefcmd}
+${lefcmd}
+${hardlefcmd}
 def read ${rootname}
 select top cell
 select area labels
@@ -171,7 +185,9 @@ EOF
 
 if ( ! -f ${dispfile} ) then
 cat > ${dispfile} << EOF
-lef read ${lefpath}
+${techlefcmd}
+${lefcmd}
+${hardlefcmd}
 load ${sourcename}
 select top cell
 expand
