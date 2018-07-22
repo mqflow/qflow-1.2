@@ -99,6 +99,8 @@ set innets false
 while {[gets $fdef line] >= 0} {
     if [regexp {[ \t]*#} $line lmatch] {
         continue
+    } elseif [regexp {[ \t]*UNITS[ \t]+DISTANCE[ \t]+MICRONS[ \t]+([^ \t]+)[ \t]*;} $line lmatch number] {
+	set units $number
     } elseif [regexp {[ \t]*SPECIALNETS[ \t]+([^ \t]+)[ \t]*;} $line lmatch number] {
         # Parse the "SPECIALNETS" statement
 	if $debug {puts stdout "start specialnets section"}
