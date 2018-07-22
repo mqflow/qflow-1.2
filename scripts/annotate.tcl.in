@@ -90,17 +90,27 @@ set added 0
 set changelist [dict create]
 set instlist [dict create]
 
+# NOTE:  Lines in section "Unfixed antenna errors" are not nets to be
+# annotated, but a list of nets that are creating DRC antenna errors.
+# These nets are ignored.
+
+set in_unfix false
 while {[gets $fant line] >= 0} {
-   if [regexp {[ \t]*Unfixed antenna errors:} $line lmatch] {
-      break
-   }
-   if [regexp {[ \t]*Net=([^ \t]+)[ \t]+Instance=([^ \t]+)[ \t]+Cell=([^ \t]+)[ \t]+Pin=([^ \t]+)} $line lmatch netname instname cellname pinname] {
-      # Keep instances seen in a dictionary and ignore redundant entries
-      if [catch {dict get $instlist $instname}] {
-         incr added
-         dict set changelist $instname [list $netname $cellname $pinname]
-	 dict set instlist $instname true
+   if {$in_unfix == false} {
+      if [regexp {[ \t]*Net=([^ \t]+)[ \t]+Instance=([^ \t]+)[ \t]+Cell=([^ \t]+)[ \t]+Pin=([^ \t]+)} $line lmatch netname instname cellname pinname] {
+         # Keep instances seen in a dictionary and ignore redundant entries
+         if [catch {dict get $instlist $instname}] {
+            incr added
+            dict set changelist $instname [list $netname $cellname $pinname]
+	    dict set instlist $instname true
+         }
       }
+   }
+   if [regexp {[ \t]*Unfixed antenna errors:} $line lmatch] {
+      set in_unfix true
+   }
+   elseif [regexp {[ \t]*# Fill cell instances} $line lmatch] {
+      set in_unfix false
    }
 }
 if {$added == 0} {
