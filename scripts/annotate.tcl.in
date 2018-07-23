@@ -108,8 +108,7 @@ while {[gets $fant line] >= 0} {
    }
    if [regexp {[ \t]*Unfixed antenna errors:} $line lmatch] {
       set in_unfix true
-   }
-   elseif [regexp {[ \t]*# Fill cell instances} $line lmatch] {
+   } elseif [regexp {[ \t]*# Fill cell instances} $line lmatch] {
       set in_unfix false
    }
 }
