@@ -428,7 +428,7 @@ advancetoken(FILE *flib, char delimiter)
                     // end of the string.
                     char *eptr = lptr + 1;
                     while (isblank(*eptr)) eptr++;
-                    if (*eptr == '\0') {
+                    if (*eptr == '\n') {
                         result = fgets(lptr, LIB_LINE_MAX - (lptr - line), flib);
                         fileCurrentLine++;
                         if (result == NULL) break;
@@ -2137,6 +2137,13 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
                       while (isblank(*metric)) metric++;
                       if (*metric == ',') metric++;
                       while ((*metric != '\0') && isblank(*metric)) metric++;
+		      if (*metric == '\"') {
+			 char *qptr;
+			 metric++;
+			 qptr = metric;
+			 while ((*qptr != '\"') && (*qptr != '\0')) qptr++;
+			 *qptr = '\0';
+		      }
                       if (!strcasecmp(metric, "af"))
                          cap_unit *= 1E-3;
                       else if (!strcasecmp(metric, "pf"))
