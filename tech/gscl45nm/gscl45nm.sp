@@ -462,6 +462,9 @@ M27 YC a_25_6# gnd gnd nmos w=0.25u l=0.05u
 + ad=0p pd=0u as=0p ps=0u 
 .ends FAX1
 
+.subckt FILL gnd vdd
+.ends FILL
+
 .subckt HAX1 vdd gnd YC A B YS
 M0 vdd A a_2_74# vdd pmos w=0.5u l=0.05u
 + ad=0p pd=0u as=0p ps=0u 

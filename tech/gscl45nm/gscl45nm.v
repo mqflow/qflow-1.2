@@ -424,6 +424,12 @@ endmodule
 
 `timescale 1ns/10ps
 `celldefine
+module FILL ();
+endmodule
+`endcelldefine
+
+`timescale 1ns/10ps
+`celldefine
 module HAX1 (YS, B, A, YC);
 input  B ;
 input  A ;

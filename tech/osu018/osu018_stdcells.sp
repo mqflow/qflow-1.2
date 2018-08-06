@@ -462,6 +462,9 @@ M27 YC a_25_6# gnd Gnd nfet w=1u l=0.2u
 + ad=0p pd=0u as=0p ps=0u 
 .ends FAX1
 
+.subckt FILL vdd gnd
+.ends FILL
+
 .subckt HAX1 vdd gnd YC A B YS
 M0 vdd A a_2_74# vdd pfet w=2u l=0.2u
 + ad=0p pd=0u as=0p ps=0u 
