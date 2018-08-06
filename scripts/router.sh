@@ -242,20 +242,23 @@ if (${scripting} == "T") then
    if ( -f antenna.out && ( -M antenna.out > -M ${rootname}_unroute.def )) then
       echo "Running annotate.tcl antenna.out ${synthdir}/${rootname}.rtlnopwr.v" \
 		|& tee -a ${synthlog}
-      echo "  ${synthdir}/${rootname}.spc ${synthdir}/${rootname}.anno.v" \
+      echo "  ${synthdir}/${rootname}.spc ${synthdir}/${rootname}.rtlnopwr.anno.v" \
 		|& tee -a ${synthlog}
       echo "  ${synthdir}/${rootname}.anno.spc ${spicepath} ${synthdir}/${rootname}_powerground" \
 		|& tee -a ${synthlog}
       ${scriptdir}/annotate.tcl antenna.out \
 		${synthdir}/${rootname}.rtlnopwr.v \
 		${synthdir}/${rootname}.spc \
-		${synthdir}/${rootname}.anno.v \
+		${synthdir}/${rootname}.rtlnopwr.anno.v \
 		${synthdir}/${rootname}.anno.spc ${spicepath} \
 		${synthdir}/${rootname}_powerground |& tee -a ${synthlog}
       # If the antenna.out file contained only unfixed errors, then
       # the annotated output files may not exist, so check.
-      if ( -f ${synthdir}/${rootname}.anno.v ) then
-	 mv ${synthdir}/${rootname}.anno.v ${synthdir}/${rootname}.rtlnopwr.v 
+      if ( -f ${synthdir}/${rootname}.rtlnopwr.anno.v ) then
+	 mv ${synthdir}/${rootname}.rtlnopwr.anno.v ${synthdir}/${rootname}.rtlnopwr.v 
+      endif
+      if ( -f ${synthdir}/${rootname}.rtl.anno.v ) then
+	 mv ${synthdir}/${rootname}.rtl.anno.v ${synthdir}/${rootname}.rtl.v 
       endif
       if ( -f ${synthdir}/${rootname}.anno.spc ) then
 	 mv ${synthdir}/${rootname}.anno.spc ${synthdir}/${rootname}.spc
