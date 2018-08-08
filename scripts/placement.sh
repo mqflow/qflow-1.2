@@ -674,7 +674,10 @@ if ($makedef == 1) then
    else
       if (${scripting} == "T") then
 	 echo "qrouter::standard_route ${rootname}_route.def false" >> ${rootname}.cfg
-	 echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
+	 # write_delays folded into standard_route in qrouter version 1.4.21.
+	 if (${major} == 1 && ${minor} == 4 && ${subv} < 21) then
+	    echo "qrouter::write_delays ${rootname}.rc" >> ${rootname}.cfg
+	 endif
 	 # Standard_route's automatic quit has been subverted in order
 	 # to write the delay file, so make sure that qrouter actually exits.
 	 echo "quit" >> ${rootname}.cfg
