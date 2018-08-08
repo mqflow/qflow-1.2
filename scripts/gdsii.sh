@@ -127,7 +127,7 @@ ${bindir}/magic ${gdsii_options} |& tee -a ${synthlog}
 # Spot check:  Did magic produce file ${rootname}.gds?
 #---------------------------------------------------------------------
 
-if ( !( -f ${rootname}.gds || ( -M ${rootname}.def \
+if ( !( -f ${rootname}.gds || ( -f ${rootname}.gds && -M ${rootname}.def \
 		< -M ${rootname}.gds ))) then
    echo "magic failure:  No file ${rootname}.gds." |& tee -a ${synthlog}
    echo "Premature exit." |& tee -a ${synthlog}

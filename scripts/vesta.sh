@@ -163,7 +163,7 @@ if ($dodelays == 1) then
        # Add delay file to vesta options, assuming it exists.
        set vesta_options = "-c -d ${rootname}.dly ${vesta_options}"
     else
-       echo "Error:  No file ${rootname}.dly, cannot back-annotate delays!" \
+       echo "Error:  No file ${rootname}.rc, cannot back-annotate delays!" \
 		|& tee -a ${synthlog}
        echo "Premature exit." |& tee -a ${synthlog}
        echo "Synthesis flow stopped due to error condition." >> ${synthlog}
