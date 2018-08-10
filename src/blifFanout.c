@@ -1313,6 +1313,8 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 	       if (t[0] == '#') skip_eol = 1;
 	       if (!strcmp(t, ".gate"))
 		  state = GATENAME;
+	       else if (!strcmp(t, ".end"))
+		  state = ENDMODEL;		
 	       break;
 	 }
 	 if (skip_eol == 1) {
