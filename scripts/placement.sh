@@ -87,13 +87,17 @@ if (-f ${synthdir}/${rootname}_powerground) then
    source ${synthdir}/${rootname}_powerground
 endif
 
-# Prepend techdir to leffile unless leffile begins with "/"
-set abspath=`echo ${leffile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set lefpath=${leffile}
-else
-   set lefpath=${techdir}/${leffile}
-endif
+# Prepend techdir to each leffile unless leffile begins with "/"
+set lefpath=""
+foreach f (${leffile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${leffile}
+   else
+      set p=${techdir}/${leffile}
+   endif
+   set lefpath="${lefpath} $p"
+end
 
 # Prepend techdir to techleffile unless techleffile begins with "/"
 set abspath=`echo ${techleffile} | cut -c1`
@@ -103,13 +107,17 @@ else
    set techlefpath=${techdir}/${techleffile}
 endif
 
-# Prepend techdir to spicefile unless spicefile begins with "/"
-set abspath=`echo ${spicefile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set spicepath=${spicefile}
-else
-   set spicepath=${techdir}/${spicefile}
-endif
+# Prepend techdir to each spicefile unless spicefile begins with "/"
+set spicepath=""
+foreach f (${spicefile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${spicefile}
+   else
+      set p=${techdir}/${spicefile}
+   endif
+   set spicepath="${spicepath} $p"
+end
 
 if (!($?logdir)) then
    set logdir=${projectpath}/log
@@ -121,6 +129,10 @@ rm -f ${synthlog} >& /dev/null
 rm -f ${logdir}/sta.log >& /dev/null
 rm -f ${logdir}/route.log >& /dev/null
 rm -f ${logdir}/post_sta.log >& /dev/null
+rm -f ${logdir}/migrate.log >& /dev/null
+rm -f ${logdir}/drc.log >& /dev/null
+rm -f ${logdir}/lvs.log >& /dev/null
+rm -f ${logdir}/gdsii.log >& /dev/null
 touch ${synthlog}
 set date=`date`
 echo "Qflow placement logfile created on $date" > ${synthlog}

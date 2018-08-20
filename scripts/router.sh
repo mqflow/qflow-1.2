@@ -109,20 +109,28 @@ else
 endif
 
 # Prepend techdir to leffile unless leffile begins with "/"
-set abspath=`echo ${leffile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set lefpath=${leffile}
-else
-   set lefpath=${techdir}/${leffile}
-endif
+set lefpath=""
+foreach f (${leffile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${leffile}
+   else
+      set p=${techdir}/${leffile}
+   endif
+   set lefpath="${lefpath} $p"
+end
 
 # Ditto for spicefile
-set abspath=`echo ${spicefile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set spicepath=${spicefile}
-else
-   set spicepath=${techdir}/${spicefile}
-endif
+set spicepath=""
+foreach f (${spicefile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${spicefile}
+   else
+      set p=${techdir}/${spicefile}
+   endif
+   set spicepath="${spicepath} $p"
+end
 
 #----------------------------------------------------------
 # Done with initialization

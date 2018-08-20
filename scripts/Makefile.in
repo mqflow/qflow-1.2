@@ -27,12 +27,13 @@ TCL_SCRIPTS += getantennacell.tcl blifanno.tcl annotate.tcl
 TCL_SCRIPTS += powerbus.tcl getpowerground.tcl arrangepins.tcl
 PYTHON_SCRIPTS = spi2xspice.py consoletext.py pinmanager.py
 PYTHON_SCRIPTS += tksimpledialog.py helpwindow.py qflow_manager.py
-PYTHON_SCRIPTS += textreport.py tooltip.py
+PYTHON_SCRIPTS += textreport.py tooltip.py count_lvs.py
 HELP_TEXT = qflow_help.txt
 
-SHELL_SCRIPTS = synthesize.sh placement.sh router.sh gdsii.sh vesta.sh
+SHELL_SCRIPTS = synthesize.sh placement.sh router.sh vesta.sh
 SHELL_SCRIPTS += qflow.sh checkdirs.sh
-SHELL_SCRIPTS += cleanup.sh display.sh createGDS.sh
+SHELL_SCRIPTS += cleanup.sh display.sh
+SHELL_SCRIPTS += drc.sh lvs.sh gdsii.sh migrate.sh
 MAIN_SCRIPT = qflow
 
 SCRIPTINSTALL = ${QFLOW_LIB_DIR}/scripts
@@ -60,6 +61,9 @@ qflow.sh:  qflow.sh.in
 	-e '/QFLOW_VERSION/s#QFLOW_VERSION#$(VERSION)#' \
 	qflow.sh.in > qflow.sh
 
+count_lvs.py: count_lvs.py.in
+	sed -e 's#ENV_PATH#$(ENV_PATH)#' $< > $@
+
 spi2xspice.py: spi2xspice.py.in
 	sed -e 's#ENV_PATH#$(ENV_PATH)#' $< > $@
 
@@ -73,6 +77,9 @@ tksimpledialog.py: tksimpledialog.py.in
 	sed -e 's#ENV_PATH#$(ENV_PATH)#' $< > $@
 
 helpwindow.py: helpwindow.py.in
+	sed -e 's#ENV_PATH#$(ENV_PATH)#' $< > $@
+
+count_lvs.py: count_lvs.py.in
 	sed -e 's#ENV_PATH#$(ENV_PATH)#' $< > $@
 
 qflow_manager.py: qflow_manager.py.in

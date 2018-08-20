@@ -1,18 +1,18 @@
 #!ENV_PATH python3
 #
-#---------------------------------------------------
+#-------------------------------------------------------------------------
 # Qflow Manager GUI.
 #
-# This is a Python tkinter script that handles the
-# process of running synthesis and place-and-route
-# on a verilog source file.
+# This is a Python tkinter script that handles the process of running the
+# synthesis and place-and-route flow on a verilog source file.
 #
-#---------------------------------------------------
+#-------------------------------------------------------------------------
 # Written by Tim Edwards
 # efabless, inc.
 # Version 1.  August 8-17, 2017
 # Version for qflow distribution: April 19-29, 2018
-#---------------------------------------------------
+# Updated to use new migrate, DRC, LVS, and GDS scripts:  August 20, 2018
+#-------------------------------------------------------------------------
 
 import io
 import os
@@ -36,6 +36,7 @@ from consoletext import ConsoleText
 from helpwindow import HelpWindow
 from textreport import TextReport
 from pinmanager import PinManager
+from count_lvs import count_LVS_failures
 
 # User preferences file (if it exists)
 prefsfile = '~/.qflow/prefs.json'
@@ -537,6 +538,21 @@ class QflowManager(ttk.Frame):
         window.stop.check = ttk.Checkbutton(window.stop, variable = self.migrate_stop)
         window.stop.check.pack(side = 'left')
 
+        self.toppane.settings.drc_settings = ttk.Frame(self.toppane.settings)
+        window = self.toppane.settings.drc_settings
+        window.title = ttk.Label(window, text = 'DRC Settings', style = 'title.TLabel')
+        window.title.pack(side = 'top')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after DRC success:')
+        window.stop.title.pack(side = 'left')
+        self.drc_stop = tkinter.IntVar(window.stop)
+        self.drc_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.drc_stop)
+        window.stop.check.pack(side = 'left')
+
         self.toppane.settings.lvs_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.lvs_settings
         window.title = ttk.Label(window, text = 'LVS Settings', style = 'title.TLabel')
@@ -552,10 +568,20 @@ class QflowManager(ttk.Frame):
         window.stop.check = ttk.Checkbutton(window.stop, variable = self.lvs_stop)
         window.stop.check.pack(side = 'left')
 
-        self.toppane.settings.drc_settings = ttk.Frame(self.toppane.settings)
-        window = self.toppane.settings.drc_settings
-        window.title = ttk.Label(window, text = 'DRC Settings', style = 'title.TLabel')
+        self.toppane.settings.gds_settings = ttk.Frame(self.toppane.settings)
+        window = self.toppane.settings.gds_settings
+        window.title = ttk.Label(window, text = 'GDS Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
+
+        window.stop = ttk.Frame(window)
+        window.stop.pack(side = 'top', fill = 'x')
+        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
+		text = 'Stop flow after GDS success:')
+        window.stop.title.pack(side = 'left')
+        self.gds_stop = tkinter.IntVar(window.stop)
+        self.gds_stop.set(0)
+        window.stop.check = ttk.Checkbutton(window.stop, variable = self.gds_stop)
+        window.stop.check.pack(side = 'left')
 
         window.gdsview = ttk.Frame(window)
         window.gdsview.pack(side = 'top', fill = 'x')
@@ -567,24 +593,6 @@ class QflowManager(ttk.Frame):
 
         window.gdsview.check = ttk.Checkbutton(window.gdsview, variable = self.gdsview)
         window.gdsview.check.pack(side = 'left')
-
-        window.stop = ttk.Frame(window)
-        window.stop.pack(side = 'top', fill = 'x')
-        window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
-		text = 'Stop flow after DRC success:')
-        window.stop.title.pack(side = 'left')
-        self.drc_stop = tkinter.IntVar(window.stop)
-        self.drc_stop.set(0)
-        window.stop.check = ttk.Checkbutton(window.stop, variable = self.drc_stop)
-        window.stop.check.pack(side = 'left')
-
-        self.toppane.settings.gds_settings = ttk.Frame(self.toppane.settings)
-        window = self.toppane.settings.gds_settings
-        window.title = ttk.Label(window, text = 'GDS Settings', style = 'title.TLabel')
-        window.title.pack(side = 'top')
-        window.message = ttk.Label(window, style = 'normal.TLabel',
-	 	text = '(there are no user-configurable settings for GDS output)')
-        window.message.pack(side = 'top')
 
         self.toppane.settings.test_settings = ttk.Frame(self.toppane.settings)
         window = self.toppane.settings.test_settings
@@ -751,48 +759,49 @@ class QflowManager(ttk.Frame):
         tooltip.ToolTip(self.toppane.checklist.migrate_run, text = "Migrate files to project area")
         tooltip.ToolTip(self.toppane.checklist.migrate_settings, text = "Show settings for file migration")
 
+        self.toppane.checklist.drc = ttk.Label(self.toppane.checklist, text="DRC",
+		style = 'section.TLabel') 
+        self.toppane.checklist.drc.grid(column = 0, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+        self.toppane.checklist.drc_result = ttk.Button(self.toppane.checklist, text="(not done)",
+		style = 'normal.TButton',
+		command = lambda filename='log/drc.log': self.textdisplay(filename))
+        self.toppane.checklist.drc_result.grid(column = 1, row = 8, ipadx = 2, padx = 2)
+        self.toppane.checklist.drc_run = ttk.Button(self.toppane.checklist, text="Run",
+		style = 'normal.TButton', state='disabled', command = self.qflow_drc) 
+        self.toppane.checklist.drc_run.grid(column = 2, row = 8, ipadx = 2, padx = 2)
+        self.toppane.checklist.drc_settings = ttk.Button(self.toppane.checklist,
+		text="Settings", style = 'normal.TButton',
+		command =lambda window=self.toppane.settings.drc_settings: self.replace_settings(window)) 
+        self.toppane.checklist.drc_settings.grid(column = 3, row = 8, ipadx = 2, padx = 2)
+        tooltip.ToolTip(self.toppane.checklist.drc_result, text = "Show DRC results")
+        tooltip.ToolTip(self.toppane.checklist.drc_run, text = "Run DRC")
+        tooltip.ToolTip(self.toppane.checklist.drc_settings, text = "Show settings for DRC")
+
         self.toppane.checklist.lvs = ttk.Label(self.toppane.checklist, text="LVS",
 		style = 'section.TLabel') 
-        self.toppane.checklist.lvs.grid(column = 0, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+        self.toppane.checklist.lvs.grid(column = 0, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
         self.toppane.checklist.lvs_result = ttk.Button(self.toppane.checklist, text="(not done)",
 		style = 'normal.TButton',
 		command = lambda filename='comp.out': self.textdisplay(filename))
-        self.toppane.checklist.lvs_result.grid(column = 1, row = 8, ipadx = 2, padx = 2)
+        self.toppane.checklist.lvs_result.grid(column = 1, row = 9, ipadx = 2, padx = 2)
         self.toppane.checklist.lvs_run = ttk.Button(self.toppane.checklist, text="Run",
 		style = 'normal.TButton', state='disabled', command = self.qflow_lvs) 
-        self.toppane.checklist.lvs_run.grid(column = 2, row = 8, ipadx = 2, padx = 2)
+        self.toppane.checklist.lvs_run.grid(column = 2, row = 9, ipadx = 2, padx = 2)
         self.toppane.checklist.lvs_settings = ttk.Button(self.toppane.checklist,
 		text="Settings", style = 'normal.TButton',
 		command =lambda window=self.toppane.settings.lvs_settings: self.replace_settings(window)) 
-        self.toppane.checklist.lvs_settings.grid(column = 3, row = 8, ipadx = 2, padx = 2)
+        self.toppane.checklist.lvs_settings.grid(column = 3, row = 9, ipadx = 2, padx = 2)
         tooltip.ToolTip(self.toppane.checklist.lvs_result, text = "Show LVS results")
         tooltip.ToolTip(self.toppane.checklist.lvs_run, text = "Run LVS")
         tooltip.ToolTip(self.toppane.checklist.lvs_settings, text = "Show settings for LVS")
 
-        self.toppane.checklist.drc = ttk.Label(self.toppane.checklist, text="DRC",
-		style = 'section.TLabel') 
-        self.toppane.checklist.drc.grid(column = 0, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
-        self.toppane.checklist.drc_result = ttk.Button(self.toppane.checklist, text="(not done)",
-		style = 'normal.TButton',
-		command = lambda filename='log/drc.log': self.textdisplay(filename))
-        self.toppane.checklist.drc_result.grid(column = 1, row = 9, ipadx = 2, padx = 2)
-        self.toppane.checklist.drc_run = ttk.Button(self.toppane.checklist, text="Run",
-		style = 'normal.TButton', state='disabled', command = self.qflow_drc) 
-        self.toppane.checklist.drc_run.grid(column = 2, row = 9, ipadx = 2, padx = 2)
-        self.toppane.checklist.drc_settings = ttk.Button(self.toppane.checklist,
-		text="Settings", style = 'normal.TButton',
-		command =lambda window=self.toppane.settings.drc_settings: self.replace_settings(window)) 
-        self.toppane.checklist.drc_settings.grid(column = 3, row = 9, ipadx = 2, padx = 2)
-        tooltip.ToolTip(self.toppane.checklist.drc_result, text = "Show DRC results")
-        tooltip.ToolTip(self.toppane.checklist.drc_run, text = "Run DRC")
-        tooltip.ToolTip(self.toppane.checklist.drc_settings, text = "Show settings for DRC")
 
         self.toppane.checklist.gds = ttk.Label(self.toppane.checklist, text="GDS",
 		style = 'section.TLabel') 
         self.toppane.checklist.gds.grid(column = 0, row = 10, ipadx = 2, padx = 2, sticky = 'nsw')
         self.toppane.checklist.gds_result = ttk.Button(self.toppane.checklist, text="(not done)",
 		style = 'normal.TButton',
-		command = lambda filename='log/gds.log': self.textdisplay(filename))
+		command = lambda filename='log/gdsii.log': self.textdisplay(filename))
         self.toppane.checklist.gds_result.grid(column = 1, row = 10, ipadx = 2, padx = 2)
         self.toppane.checklist.gds_run = ttk.Button(self.toppane.checklist, text="Run",
 		style = 'normal.TButton', state='disabled', command = self.qflow_gds) 
@@ -1104,7 +1113,7 @@ class QflowManager(ttk.Frame):
             # There is no status, so get one
             self.qflow_get_status()
 
-        stages = ['begin', 'prep', 'synth', 'place', 'timing', 'route', 'backanno', 'migrate', 'lvs', 'drc', 'gds', 'clean', 'done']
+        stages = ['begin', 'prep', 'synth', 'place', 'timing', 'route', 'backanno', 'migrate', 'drc', 'lvs', 'gds', 'clean', 'done']
 
         try:
             stage = stages.index(status) - 1
@@ -1168,32 +1177,32 @@ class QflowManager(ttk.Frame):
             self.toppane.checklist.migrate_run.config(state = 'disabled')
         else:
             self.toppane.checklist.backanno_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.migrate_run.config(state = 'enabled')
+            self.toppane.checklist.migrate_run.config(state = 'enabled', text = 'Run')
 
         if stage <= 6:
             result = pftext if stage == 6 else "(not done)"
             style = pfstyle if stage == 6 else "normal.TButton"
             self.toppane.checklist.migrate_result.configure(text=result, style=style)
-            self.toppane.checklist.lvs_run.config(state = 'disabled')
+            self.toppane.checklist.drc_run.config(state = 'disabled')
         else:
             self.toppane.checklist.migrate_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.lvs_run.config(state = 'enabled')
+            self.toppane.checklist.drc_run.config(state = 'enabled', text = 'Run')
         if stage <= 7:
             result = pftext if stage == 7 else "(not done)"
             style = pfstyle if stage == 7 else "normal.TButton"
-            self.toppane.checklist.lvs_result.configure(text=result, style=style)
-            self.toppane.checklist.drc_run.config(state = 'disabled')
+            self.toppane.checklist.drc_result.configure(text=result, style=style)
+            self.toppane.checklist.lvs_run.config(state = 'disabled')
         else:
-            self.toppane.checklist.lvs_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.drc_run.config(state = 'enabled')
+            self.toppane.checklist.drc_result.configure(text='Okay', style='green.TButton')
+            self.toppane.checklist.lvs_run.config(state = 'enabled', text = 'Run')
         if stage <= 8:
             result = pftext if stage == 8 else "(not done)"
             style = pfstyle if stage == 8 else "normal.TButton"
-            self.toppane.checklist.drc_result.configure(text=result, style=style)
+            self.toppane.checklist.lvs_result.configure(text=result, style=style)
             self.toppane.checklist.gds_run.config(state = 'disabled')
         else:
-            self.toppane.checklist.drc_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.gds_run.config(state = 'enabled')
+            self.toppane.checklist.lvs_result.configure(text='Okay', style='green.TButton')
+            self.toppane.checklist.gds_run.config(state = 'enabled', text = 'Run')
         if stage <= 9:
             result = pftext if stage == 9 else "(not done)"
             style = pfstyle if stage == 9 else "normal.TButton"
@@ -1204,7 +1213,7 @@ class QflowManager(ttk.Frame):
                 self.toppane.checklist.clean_run.config(state = 'enabled')
         else:
             self.toppane.checklist.gds_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.clean_run.config(state = 'enabled')
+            self.toppane.checklist.clean_run.config(state = 'enabled', text = 'Run')
         if stage <= 10:
             result = pftext if stage == 10 else "(not done)"
             style = pfstyle if stage == 10 else "normal.TButton"
@@ -1248,15 +1257,15 @@ class QflowManager(ttk.Frame):
         else:
             self.toppane.checklist.migrate_run.config(style = 'normal.TButton')
         if stage == 7:
-            self.replace_settings(self.toppane.settings.lvs_settings)
-            self.toppane.checklist.lvs_run.config(style = 'bold.TButton', text = 'Run')
-        else:
-            self.toppane.checklist.lvs_run.config(style = 'normal.TButton')
-        if stage == 8:
             self.replace_settings(self.toppane.settings.drc_settings)
             self.toppane.checklist.drc_run.config(style = 'bold.TButton', text = 'Run')
         else:
             self.toppane.checklist.drc_run.config(style = 'normal.TButton')
+        if stage == 8:
+            self.replace_settings(self.toppane.settings.lvs_settings)
+            self.toppane.checklist.lvs_run.config(style = 'bold.TButton', text = 'Run')
+        else:
+            self.toppane.checklist.lvs_run.config(style = 'normal.TButton')
         if stage == 9:
             self.replace_settings(self.toppane.settings.gds_settings)
             self.toppane.checklist.gds_run.config(style = 'bold.TButton', text = 'Run')
@@ -1593,7 +1602,7 @@ class QflowManager(ttk.Frame):
         if os.path.exists(magfile):
             statbuf = os.stat(magfile)
             if statbuf.st_mtime >= stime:
-                self.status = 'lvs'
+                self.status = 'drc'
                 stime = statbuf.st_mtime
             else:
                 self.print('Status: .mag file predates .def file.')
@@ -1606,34 +1615,7 @@ class QflowManager(ttk.Frame):
             self.status = 'migrate'
             return
 
-        # Step nine: Check for comp.json file
-        self.print("Step nine.")
-        compfile = self.layoutdir + '/comp.json'
-        if os.path.exists(compfile):
-            statbuf = os.stat(compfile)
-            if statbuf.st_mtime >= stime:
-                failures = self.count_LVS_failures(compfile)
-                total = failures[0]
-                if total == 0:
-                    self.status = 'drc'
-                    stime = statbuf.st_mtime
-                else:
-                    self.print('Status: comp.json reports ' + str(total) + ' LVS errors.')
-                    self.print('Status set to "lvs"')
-                    self.status = 'lvs:fail'
-                    return
-            else:
-                self.print('Status: comp.json file predates .mag file.')
-                self.print('Status set to "lvs"')
-                self.status = 'lvs'
-                return
-        else:
-            self.print('Status: no comp.json file.')
-            self.print('Status set to "lvs"')
-            self.status = 'lvs'
-            return
-
-        # Step ten: Check for drc results in drc.log file
+        # Step nine: Check for drc results in drc.log file
         self.print("Step ten.")
         logfile = self.logdir + '/drc.log'
         if os.path.exists(logfile):
@@ -1643,7 +1625,7 @@ class QflowManager(ttk.Frame):
                     for line in ifile:
                         if 'No DRC errors' in line:
                             stime = statbuf.st_mtime
-                            self.status = 'gds'
+                            self.status = 'lvs'
                             break
                         elif 'DRC error count' in line:
                             self.print('Status: logfile reports ' + line)
@@ -1659,6 +1641,33 @@ class QflowManager(ttk.Frame):
             self.print('Status: no DRC log file created.')
             self.print('Status set to "drc"')
             self.status = 'drc'
+            return
+
+        # Step ten: Check for comp.json file
+        self.print("Step nine.")
+        compfile = self.layoutdir + '/comp.json'
+        if os.path.exists(compfile):
+            statbuf = os.stat(compfile)
+            if statbuf.st_mtime >= stime:
+                failures = count_LVS_failures(compfile)
+                total = failures[0]
+                if total == 0:
+                    self.status = 'gds'
+                    stime = statbuf.st_mtime
+                else:
+                    self.print('Status: comp.json reports ' + str(total) + ' LVS errors.')
+                    self.print('Status set to "lvs"')
+                    self.status = 'lvs:fail'
+                    return
+            else:
+                self.print('Status: comp.json file predates .mag file.')
+                self.print('Status set to "lvs"')
+                self.status = 'lvs'
+                return
+        else:
+            self.print('Status: no comp.json file.')
+            self.print('Status set to "lvs"')
+            self.status = 'lvs'
             return
 
         # Step eleven: Check for project.gds file
@@ -2365,6 +2374,163 @@ class QflowManager(ttk.Frame):
         self.watchclock(filename, filemtime, self.done_backanno)
         return
 
+    def qflow_migrate(self):
+        # If the migration is currently in progress, the 'Run' button stops it.
+        status = self.toppane.checklist.migrate_run.cget('text')
+        if status == 'Stop':
+            # Stop the running process
+            self.stop_proc()
+            self.gui_set_status()
+            return
+
+        # Can only run migration if post-route timing has been run.
+        status = self.toppane.checklist.backanno_result.cget('text')
+        if status != 'Okay':
+            self.print('Cannot run migration until post-route static timing analysis has passed.')
+            return
+
+        # Reset all the buttons and status labels below this one
+        self.status = 'migrate'
+        self.gui_set_status()
+        self.toppane.checklist.migrate_result.configure(text="In progress", style='normal.TButton')
+        self.toppane.checklist.migrate_run.configure(text="Stop", style='normal.TButton')
+
+        self.print('Running: qflow ' + self.project + ' migrate')
+        self.update_idletasks()
+
+        # Check for long format option and update project_vars.sh
+        self.update_project_vars()
+
+        self.qflowproc = subprocess.Popen(['qflow', self.project, 'migrate'],
+		stdout = subprocess.PIPE, stderr=subprocess.PIPE, bufsize = 0, cwd = self.rootpath)
+        filename = self.logdir + '/migrate.log'
+        try:
+            statbuf = os.stat(filename)
+        except:
+            filemtime = 0
+        else:
+            filemtime = statbuf.st_mtime
+        self.watchclock(filename, filemtime, self.done_migrate)
+        return
+
+    def qflow_drc(self):
+        # If the DRC is currently in progress, the 'Run' button stops it.
+        status = self.toppane.checklist.drc_run.cget('text')
+        if status == 'Stop':
+            # Stop the running process
+            self.stop_proc()
+            self.gui_set_status()
+            return
+
+        # Can only run DRC if migration has been run and completed.
+        status = self.toppane.checklist.migrate_result.cget('text')
+        if status != 'Okay':
+            self.print('Cannot run DRC check until migration has been run.')
+            return
+
+        # Reset all the buttons and status labels below this one
+        self.status = 'drc'
+        self.gui_set_status()
+        self.toppane.checklist.drc_result.configure(text="In progress", style='normal.TButton')
+        self.toppane.checklist.drc_run.configure(text="Stop", style='normal.TButton')
+
+        self.print('Running: qflow ' + self.project + ' drc')
+        self.update_idletasks()
+
+        # Check for long format option and update project_vars.sh
+        self.update_project_vars()
+
+        self.qflowproc = subprocess.Popen(['qflow', self.project, 'drc'],
+		stdout = subprocess.PIPE, stderr=subprocess.PIPE, bufsize = 0, cwd = self.rootpath)
+        filename = self.logdir + '/drc.log'
+        try:
+            statbuf = os.stat(filename)
+        except:
+            filemtime = 0
+        else:
+            filemtime = statbuf.st_mtime
+        self.watchclock(filename, filemtime, self.done_drc)
+        return
+
+    def qflow_lvs(self):
+        # If the LVS is currently in progress, the 'Run' button stops it.
+        status = self.toppane.checklist.lvs_run.cget('text')
+        if status == 'Stop':
+            # Stop the running process
+            self.stop_proc()
+            self.gui_set_status()
+            return
+
+        # Can only run LVS comparison if DRC has been run and passed.
+        status = self.toppane.checklist.drc_result.cget('text')
+        if status != 'Okay':
+            self.print('Cannot run LVS comparison until DRC has passed.')
+            return
+
+        # Reset all the buttons and status labels below this one
+        self.status = 'lvs'
+        self.gui_set_status()
+        self.toppane.checklist.lvs_result.configure(text="In progress", style='normal.TButton')
+        self.toppane.checklist.lvs_run.configure(text="Stop", style='normal.TButton')
+
+        self.print('Running: qflow ' + self.project + ' lvs')
+        self.update_idletasks()
+
+        # Check for long format option and update project_vars.sh
+        self.update_project_vars()
+
+        self.qflowproc = subprocess.Popen(['qflow', self.project, 'lvs'],
+		stdout = subprocess.PIPE, stderr=subprocess.PIPE, bufsize = 0, cwd = self.rootpath)
+        filename = self.logdir + '/lvs.log'
+        try:
+            statbuf = os.stat(filename)
+        except:
+            filemtime = 0
+        else:
+            filemtime = statbuf.st_mtime
+        self.watchclock(filename, filemtime, self.done_lvs)
+        return
+
+    def qflow_gds(self):
+        # If the GDS is currently in progress, the 'Run' button stops it.
+        status = self.toppane.checklist.gds_run.cget('text')
+        if status == 'Stop':
+            # Stop the running process
+            self.stop_proc()
+            self.gui_set_status()
+            return
+
+        # Can only run GDS generation if LVS has been run and passed.
+        status = self.toppane.checklist.lvs_result.cget('text')
+        if status != 'Okay':
+            self.print('Cannot run GDS generation until LVS comparison has passed.')
+            return
+
+        # Reset all the buttons and status labels below this one
+        self.status = 'gds'
+        self.gui_set_status()
+        self.toppane.checklist.gds_result.configure(text="In progress", style='normal.TButton')
+        self.toppane.checklist.gds_run.configure(text="Stop", style='normal.TButton')
+
+        self.print('Running: qflow ' + self.project + ' gdsii')
+        self.update_idletasks()
+
+        # Check for long format option and update project_vars.sh
+        self.update_project_vars()
+
+        self.qflowproc = subprocess.Popen(['qflow', self.project, 'gdsii'],
+		stdout = subprocess.PIPE, stderr=subprocess.PIPE, bufsize = 0, cwd = self.rootpath)
+        filename = self.logdir + '/gdsii.log'
+        try:
+            statbuf = os.stat(filename)
+        except:
+            filemtime = 0
+        else:
+            filemtime = statbuf.st_mtime
+        self.watchclock(filename, filemtime, self.done_gds)
+        return
+
+    #----------------------------------------------------------------------
     # Pick up GDS file from the technology .sh file
     # Note that there needs to be a way to handle multiple GDS files. . .
 
@@ -2428,511 +2594,6 @@ class QflowManager(ttk.Frame):
                         leffiles.append(lmatch.group(1))
 
         return leffiles
-
-    def qflow_migrate_files(self, full):
-        # Can only run migration if routing has been run and passed.
-        if full:
-            status = self.toppane.checklist.route_result.cget('text')
-            if status != 'Okay':
-                self.print('Cannot run migration until routing has passed.')
-                return
-        else:
-            status = self.toppane.checklist.place_result.cget('text')
-            if status != 'Okay':
-                self.print('Cannot run migration until placement has passed.')
-                return
-
-        # Reset all the buttons and status labels below this one
-        if full:
-            self.status = 'migrate'
-            self.gui_set_status()
-            self.toppane.checklist.migrate_result.configure(text="In progress", style='normal.TButton')
-
-        self.update_idletasks()
-        failed = False
-
-        datestring = datetime.datetime.now().strftime('%c')
-
-        layoutdir = self.layoutdir
-        synthdir = self.synthdir
-        filename = layoutdir + '/' + self.project + '.def'
-
-        # Prepare layout/ directory if it doesn't exist
-
-        if not os.path.exists(layoutdir):
-            os.makedirs(layoutdir)
-            pdkdir = os.path.realpath(self.pdkdir)
-            pdkmagicrc = glob.glob(pdkdir + '*.magicrc')
-            shutil.copy(pdkmagicrc, layoutdir + '/.magicrc')
-
-        # Pick up LEF files from the project .cfg file
-        leffiles = self.get_project_leffiles()
-
-        # Load DEF file into magic and write out .mag and .lef files
-        mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-dnull', '-noconsole'],
-		stdin = subprocess.PIPE, stdout = subprocess.PIPE,
-		stderr = subprocess.PIPE, cwd = layoutdir, universal_newlines = True)
-        mproc.stdin.write("box 0 0 0 0\n")
-        # NOTE:  Need to select GDS output style from GUI or setup script.
-        # mproc.stdin.write("cif ostyle gdsii\n")
-        mproc.stdin.write("drc off\n")
-        for leffile in leffiles:
-            mproc.stdin.write("lef read " + leffile + "\n")
-        mproc.stdin.write("def read " + layoutdir + '/' + self.project + ".def\n")
-        mproc.stdin.write("load " + self.project + "\n")
-        mproc.stdin.write("writeall force " + self.project + "\n")
-
-        if full:
-            mproc.stdin.write("lef write\n")
-        mproc.stdin.write("quit -noprompt\n")
-        magicpair = mproc.communicate(timeout=120)
-
-        with open(self.logdir + '/migrate.log', 'w') as ofile:
-            self.print('Qflow file migration output log ' + datestring, file=ofile)
-            for line in magicpair[0].splitlines():
-                self.print(line)
-                self.print(line, file=ofile)
-            for line in magicpair[1].splitlines():
-                self.print(line, file=sys.stderr)
-                self.print(line, file=ofile)
-   
-        # Prepare netlist/layout, netlist/schem, and netlist/func directories
-        # if they don't exist
-
-        schem_path = self.netlistdir + '/schem'
-        func_path = self.netlistdir + '/func'
-        lay_path = self.netlistdir + '/layout'
-
-        if not os.path.exists(self.netlistdir):
-            os.makedirs(self.netlistdir)
-
-        if not os.path.exists(func_path):
-            os.makedirs(func_path)
-
-        if not os.path.exists(schem_path):
-            os.makedirs(schem_path)
-
-        if not os.path.exists(lay_path):
-            os.makedirs(lay_path)
-
-        # Put spice netlist in netlist/schem and xspice netlist in netlist/func
-        # NOTE: qflow setup was corrected 8/23/2017 to use the schem file for blif2BSpice.
-
-        shutil.copy(synthdir + '/' + self.project + '.spc', schem_path + '/' + self.project + '.spi')
-        shutil.copy(synthdir + '/' + self.project + '.xspice', func_path + '/' + self.project + '.spi')
-
-        # Only advance to LVS and mark Migrate as pass/fail when full == True.
-        # Pre-route migration can fail with only a message in the information window.
-        if full:
-            if failed:
-                self.toppane.checklist.migrate_result.configure(text="Fail", style='red.TButton')
-            else:
-                self.status = 'lvs'
-                self.gui_set_status()
-        else:
-            if failed:
-                self.print('Pre-route migration failed (non-fatal);  please check logs for errors.')
-
-    def qflow_migrate(self):
-        self.qflow_migrate_files(full=True)
-        if self.status == 'lvs' and self.migrate_stop.get() == 0:
-            self.qflow_lvs()
-
-    def count_LVS_failures(self, filename):
-        with open(filename, 'r') as cfile:
-            lvsdata = json.load(cfile)
-
-        # Count errors in the JSON file
-        failures = 0
-        devfail = 0
-        netfail = 0
-        pinfail = 0
-        propfail = 0
-        netdiff = 0
-        devdiff = 0
-        ncells = len(lvsdata)
-        for c in range(0, ncells):
-            cellrec = lvsdata[c]
-
-            if c == ncells - 1:
-                topcell = True
-            else:
-                topcell = False
-
-            # Most errors must only be counted for the top cell, because individual
-            # failing cells are flattened and the matching attempted again on the
-            # flattened netlist.
-
-            if topcell:
-                if 'devices' in cellrec:
-                    devices = cellrec['devices']
-                    devlist = [val for pair in zip(devices[0], devices[1]) for val in pair]
-                    devpair = list(devlist[p:p + 2] for p in range(0, len(devlist), 2))
-                    for dev in devpair:
-                        c1dev = dev[0]
-                        c2dev = dev[1]
-                        diffdevs = abs(c1dev[1] - c2dev[1])
-                        failures += diffdevs
-                        devdiff += diffdevs
-
-                if 'nets' in cellrec:
-                    nets = cellrec['nets']
-                    diffnets = abs(nets[0] - nets[1])
-                    failures += diffnets
-                    netdiff += diffnets
-
-                if 'badnets' in cellrec:
-                    badnets = cellrec['badnets']
-                    failures += len(badnets)
-                    netfail += len(badnets)
-
-                if 'badelements' in cellrec:
-                    badelements = cellrec['badelements']
-                    failures += len(badelements)
-                    devfail += len(badelements)
-
-                if 'pins' in cellrec:
-                    pins = cellrec['pins']
-                    pinlist = [val for pair in zip(pins[0], pins[1]) for val in pair]
-                    pinpair = list(pinlist[p:p + 2] for p in range(0, len(pinlist), 2))
-                    for pin in pinpair:
-                        # Avoid flagging global vs. local names, e.g., "gnd" vs. "gnd!,"
-                        # and ignore case when comparing pins.
-                        pin0 = re.sub('!$', '', pin[0].lower())
-                        pin1 = re.sub('!$', '', pin[1].lower())
-                        if pin0 != pin1:
-                            failures += 1
-                            pinfail += 1
-
-            # Property errors must be counted for every cell
-            if 'properties' in cellrec:
-                properties = cellrec['properties']
-                failures += len(properties)
-                propfail += len(properties)
-
-        return [failures, netfail, devfail, pinfail, propfail, netdiff, devdiff]
-
-    def qflow_lvs(self):
-        global qflow_bin_dir
-
-        # Can only run LVS if routing has been run and passed.
-        status = self.toppane.checklist.route_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot run LVS until routing has passed.')
-            return
-
-        # Reset all the buttons and status labels below this one
-        self.status = 'lvs'
-        self.gui_set_status()
-        self.toppane.checklist.lvs_result.configure(text="In progress", style='normal.TButton')
-
-        self.update_idletasks()
-        failed = False
-
-        datestring = datetime.datetime.now().strftime('%c')
-
-        mag_path = self.layoutdir
-        schem_path = self.netlistdir + '/schem'
-        lay_path = self.netlistdir + '/layout'
-
-        leffiles = self.get_project_leffiles()
-
-        # Time to run extraction is proportional to the file size.
-        # Set timeout accordingly.  Allow 3 minutes per MB for timeout.
-        try:
-            statbuf = os.stat(mag_path + '/' + self.project + '.mag')
-            magmtime = statbuf.st_mtime
-        except:
-            mtimeout = 600
-            magmtime = -1 
-        else:
-            mtimeout = round(180 * statbuf.st_size / 1000000)
-
-        # Quick bypass method:  if .ext file and netlist file exist and
-        # post-date the layout, then skip the extraction.  This works around
-        # the timeout issue.  Ultimately this needs to be solved by creating
-        # a "qflow lvs" method for the qflow command-line.
-
-        skipextract = False
-        try:
-            statbuf = os.stat(mag_path + '/' + self.project + '.ext')
-            extmtime = statbuf.st_mtime
-            statbuf = os.stat(lay_path + '/' + self.project + '.spi')
-            spimtime = statbuf.st_mtime
-        except:
-            pass
-        else:
-            if (magmtime > 0) and (magmtime < extmtime) and (magmtime < spimtime):
-                skipextract = True
-      
-        # Extract layout netlist from layout
-        self.print('Extracting netlist from layout')
-        mproc = subprocess.Popen([qflow_bin_dir + '/magic', '-dnull', '-noconsole'],
-		stdin = subprocess.PIPE, stdout = subprocess.PIPE,
-		stderr = subprocess.PIPE, cwd = mag_path, universal_newlines = True)
-
-        mproc.stdin.write("box 0 0 0 0\n")
-        mproc.stdin.write("drc off\n")
-        # Digital cells only exist in LEF, so it is important to read those
-        # first before reading in the top-level project.
-        for leffile in leffiles:
-            mproc.stdin.write("lef read " + leffile + "\n")
-        mproc.stdin.write("load " + self.project + "\n")
-        mproc.stdin.write("select top cell\n")
-        mproc.stdin.write("expand\n")
-        if not skipextract:
-            mproc.stdin.write("extract all\n")
-            mproc.stdin.write("ext2spice hierarchy on\n")
-            mproc.stdin.write("ext2spice format ngspice\n")
-            mproc.stdin.write("ext2spice scale off\n")
-            mproc.stdin.write("ext2spice renumber off\n")
-            mproc.stdin.write("ext2spice cthresh infinite\n")
-            mproc.stdin.write("ext2spice rthresh infinite\n")
-            mproc.stdin.write("ext2spice blackbox on\n")
-            mproc.stdin.write("ext2spice -o " + lay_path + "/" + self.project + ".spi\n")
-        mproc.stdin.write("quit -noprompt\n")
-
-        try:
-            magicpair = mproc.communicate(timeout=mtimeout)
-        except subprocess.TimeoutExpired:
-            self.print('Extraction timeout.  Need to wait for netlist to be generated.')
-            self.toppane.checklist.lvs_result.configure(text="(incomplete)")
-            return
-
-        # Remove the .ext files left behind by the extraction
-        for file in os.listdir(mag_path):
-            if os.path.splitext(file)[1] == '.ext':
-                os.remove(mag_path + '/' + file)
-
-        with open(self.logdir + '/lvs.log', 'w') as ofile:
-            self.print('Qflow LVS output log ' + datestring, file=ofile)
-            self.print('Extraction and netlisting', file=ofile)
-            for line in magicpair[0].splitlines():
-                self.print(line)
-                self.print(line, file=ofile)
-            for line in magicpair[1].splitlines():
-                self.print(line, file=sys.stderr)
-                self.print(line, file=ofile)
-   
-        # Run batch LVS per lvs_manager.  After migration, LVS can be run directly from
-        # the project manager, for details.
-
-        pdkdir = os.path.realpath(self.pdkdir)
-        lvs_setup = pdkdir + '/' + self.pdknode.get() + '_setup.tcl'
- 
-        if not os.path.isfile(lvs_setup):
-            self.print('Error:  No LVS setup file at ' + lvs_setup, file=sys.stderr)
-            # self.print('Diagnostic:  self.pdkdir is ' + self.pdkdir)
-
-        self.print('Running netgen -batch lvs "' + lay_path + '/' + self.project + '.spi ' + self.project + '" "' + schem_path + '/' + self.project + '.spi ' + self.project + '" ' + lvs_setup + ' comp.out -json -blackbox')
-
-        lvsproc = subprocess.Popen([qflow_bin_dir + '/netgen', '-batch', 'lvs',
-		lay_path + '/' + self.project + '.spi ' + self.project,
-		schem_path + '/' + self.project + '.spi ' + self.project,
-		lvs_setup, 'comp.out', '-json', '-blackbox'], cwd=mag_path,
-		stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        # Dump subprocess output to log file
-        lvspair = lvsproc.communicate(timeout=600)
-
-        with open(self.logdir + '/lvs.log', 'a') as ofile:
-            self.print('Netgen LVS', file=ofile)
-            for line in lvspair[0].splitlines():
-                self.print(line.decode('utf-8'))
-                self.print(line.decode('utf-8'), file=ofile)
-            for line in lvspair[1].splitlines():
-                self.print(line.decode('utf-8'))
-                self.print(line.decode('utf-8'), file=ofile)
-
-        if not os.path.exists(mag_path + '/comp.json'):
-            self.print("Error: LVS failed to generate output file.")
-            self.toppane.checklist.lvs_result.configure(text="Fail", style='red.TButton')
-            return
-
-        failures = self.count_LVS_failures(mag_path + '/comp.json')
-
-        total = failures[0]
-        if total > 0:
-            failed = True
-            self.print('LVS reports:')
-            self.print('    net count difference = ' + str(failures[5]))
-            self.print('    device count difference = ' + str(failures[6]))
-            self.print('    unmatched nets = ' + str(failures[1]))
-            self.print('    unmatched devices = ' + str(failures[2]))
-            self.print('    unmatched pins = ' + str(failures[3]))
-            self.print('    property failures = ' + str(failures[4]))
-        else:
-            self.print('LVS reports no net, device, pin, or property mismatches.')
- 
-        if failed:
-            self.toppane.checklist.lvs_result.configure(text="Fail", style='red.TButton')
-        else:
-            self.status = 'drc'
-            self.gui_set_status()
-
-        if self.status == 'drc' and self.lvs_stop.get() == 0:
-            self.qflow_drc()
-
-    def qflow_drc(self):
-        # Can only run DRC if LVS has been run and passed.
-        status = self.toppane.checklist.lvs_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot run DRC until LVS has passed.')
-            return
-
-        # Reset all the buttons and status labels below this one
-        self.status = 'drc'
-        self.gui_set_status()
-        self.toppane.checklist.drc_result.configure(text="In progress", style='normal.TButton')
-
-        self.update_idletasks()
-        failed = False
-
-        datestring = datetime.datetime.now().strftime('%c')
-
-        # Run batch DRC
-
-        mag_path = self.layoutdir
-
-        drcproc = subprocess.Popen(['magic', '-dnull', '-noconsole'],
-		stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr=subprocess.PIPE,
-		cwd = mag_path, universal_newlines = True)
-
-        if self.gdsview.get() == 0:
-            # Pick up LEF files from the project .cfg file and read
-            # in the standard cell abstract views.
-            leffiles = self.get_project_leffiles()
-
-            for leffile in leffiles:
-                drcproc.stdin.write("lef read " + leffile + "\n")
-        else:
-            # Use the GDS view of the standard cells
-            gdsfiles = self.get_project_gdsfiles()
-            drcproc.stdin.write("gds readonly true\n")
-            drcproc.stdin.write("gds rescale false\n")
-            for gdsfile in gdsfiles:
-                drcproc.stdin.write("gds read " + gdsfile + "\n")
-
-        drcproc.stdin.write("load " + self.project + "\n")
-
-        drcproc.stdin.write("drc on\n")
-        drcproc.stdin.write("select top cell\n")
-        drcproc.stdin.write("expand\n")
-        drcproc.stdin.write("drc check\n")
-        drcproc.stdin.write("drc catchup\n")
-        drcproc.stdin.write("set dcount [drc list count total]\n")
-        drcproc.stdin.write("puts stdout \"drc = $dcount\"\n")
-        outpair = drcproc.communicate(timeout=1200)
-        magrex = re.compile('drc[ \t]+=[ \t]+([0-9.]+)[ \t]*$')
-        drccount = -1
-
-        # Log this to log/drc.log
-        with open(self.logdir + '/drc.log', 'w') as ofile:
-            self.print('Qflow DRC output log ' + datestring, file=ofile)
-            self.print('Running DRC on qflow-generated layout', file=ofile)
-            for line in outpair[0].splitlines():
-                # Diagnostic
-                self.print(line)
-                self.print(line, file=ofile)
-                lmatch = magrex.match(line)
-                if lmatch:
-                    drccount = int(lmatch.group(1))
-            for line in outpair[1].splitlines():
-                self.print(line, file=sys.stderr)
-                self.print(line, file=ofile)
-
-            if drccount == -1:
-                self.print('Problem running DRC process:  No result.', file=sys.stderr)
-                self.print('Problem running DRC process:  No result.', file=ofile)
-                failed = True
-            elif drccount == 0:
-                self.print('No DRC errors in layout')
-                self.print('No DRC errors in layout', file=ofile)
-            else:
-                self.print('DRC error count is ' + str(drccount), file=sys.stderr)
-                self.print('DRC error count is ' + str(drccount), file=ofile)
-                failed = True
-
-        if failed:
-            self.toppane.checklist.drc_result.configure(text="Fail", style='red.TButton')
-        else:
-            self.status = 'gds'
-            self.gui_set_status()
-
-        if self.status == 'gds' and self.drc_stop.get() == 0:
-            self.qflow_gds()
-
-        return
-
-    def qflow_gds(self):
-        # Can only run GDS if DRC has been run and passed.
-        status = self.toppane.checklist.drc_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot generate GDS until DRC has passed.')
-            return
-
-        # Reset all the buttons and status labels below this one
-        self.status = 'gds'
-        self.gui_set_status()
-        self.toppane.checklist.gds_result.configure(text="In progress", style='normal.TButton')
-
-        self.update_idletasks()
-        failed = False
-
-        datestring = datetime.datetime.now().strftime('%c')
-
-        # Run batch GDS.
-        mag_path = self.layoutdir
-
-        # Pick up GDS files from the technology .sh file
-        gdsfiles = self.get_project_gdsfiles()
-
-        gdsproc = subprocess.Popen(['magic', '-dnull', '-noconsole'],
-		stdin = subprocess.PIPE, stdout = subprocess.PIPE, stderr=subprocess.PIPE,
-		cwd = mag_path, universal_newlines = True)
-
-        gdsproc.stdin.write("drc off\n")
-        gdsproc.stdin.write("box 0 0 0 0\n")
-        gdsproc.stdin.write("gds readonly true\n")
-        gdsproc.stdin.write("gds rescale false\n")
-        for gdsfile in gdsfiles:
-            gdsproc.stdin.write("gds read " + gdsfile + "\n")
-        gdsproc.stdin.write("load " + self.project + "\n")
-        gdsproc.stdin.write("expand\n")
-        gdsproc.stdin.write("select top cell\n")
-        gdsproc.stdin.write("gds write " + self.project + "\n")
-        outpair = gdsproc.communicate(timeout=1200)
-
-        # Log this to log/gds.log
-        with open(self.logdir + '/gds.log', 'w') as ofile:
-            self.print('Qflow GDS output log ' + datestring, file=ofile)
-            self.print('Generating GDS output for qflow-generated layout', file=ofile)
-            for line in outpair[0].splitlines():
-                # Diagnostic
-                self.print(line)
-                self.print(line, file=ofile)
-            for line in outpair[1].splitlines():
-                self.print(line, file=sys.stderr)
-                self.print(line, file=ofile)
-
-            # To be done:  Define GDS failure. . .
-            failure = 0
-
-            if failure == 1:
-                self.print('Problem generating GDS:  No result.', file=sys.stderr)
-                self.print('Problem generating GDS:  No result.', file=ofile)
-                failed = True
-            else:
-                self.print('GDS output generated successfully.')
-                self.print('GDS output generated successfully', file=ofile)
-                failed = False
-
-        if failed:
-            self.toppane.checklist.gds_result.configure(text="Fail", style='red.TButton')
-        else:
-            self.status = 'clean'
-            self.gui_set_status()
-        return
 
     def qflow_tb(self):
         # Can only run testbench if DRC has been run and passed.
@@ -3085,7 +2746,7 @@ class QflowManager(ttk.Frame):
             rfiles.append(ndir + '/schem/' + self.project + '.spi')
             rfiles.append(logdir + '/drc.log')
             rfiles.append(logdir + '/lvs.log')
-            rfiles.append(logdir + '/gds.log')
+            rfiles.append(logdir + '/gdsii.log')
             rfiles.append(logdir + '/migrate.log')
             rfiles.append(logdir + '/place.log')
             rfiles.append(logdir + '/post_sta.log')
@@ -3177,9 +2838,6 @@ class QflowManager(ttk.Frame):
             self.status = 'timing'
             self.gui_set_status()
 
-            # Do initial migration to .mag file for checking placement layout
-            self.qflow_migrate_files(full=False)
-
         if self.status == 'timing' and self.place_stop.get() == 0:
             self.qflow_sta()
 
@@ -3262,6 +2920,107 @@ class QflowManager(ttk.Frame):
         if self.status == 'migrate' and self.post_sta_stop.get() == 0:
             self.qflow_migrate()
 
+    def done_migrate(self, filename, status):
+        failed = False
+
+        if status == 'stop' or status == 'fail':
+            failed = True
+
+        # Check if log/migrate.log shows an error occurring
+        logfile = self.logdir + '/migrate.log'
+        if os.path.exists(logfile):
+            with open(logfile, 'r') as ifile:
+                for line in ifile:
+                    if 'Synthesis flow stopped' in line:
+                        self.print("Migration failed with error condition (see log file).")
+                        failed = True
+                        break
+
+        if failed:
+            self.toppane.checklist.migrate_result.configure(text="Fail", style='red.TButton')
+        else:
+            self.status = 'drc'
+            self.gui_set_status()
+
+        if self.status == 'drc' and self.migrate_stop.get() == 0:
+            self.qflow_drc()
+
+    def done_drc(self, filename, status):
+        failed = False
+
+        if status == 'stop' or status == 'fail':
+            failed = True
+
+        # Check if log/drc.log shows an error occurring
+        logfile = self.logdir + '/drc.log'
+        if os.path.exists(logfile):
+            with open(logfile, 'r') as ifile:
+                for line in ifile:
+                    if 'Synthesis flow stopped' in line:
+                        self.print("DRC failed with error condition (see log file).")
+                        failed = True
+                        break
+
+        if failed:
+            self.toppane.checklist.drc_result.configure(text="Fail", style='red.TButton')
+        else:
+            self.status = 'lvs'
+            self.gui_set_status()
+
+        if self.status == 'lvs' and self.drc_stop.get() == 0:
+            self.qflow_lvs()
+
+    def done_lvs(self, filename, status):
+        failed = False
+
+        if status == 'stop' or status == 'fail':
+            failed = True
+
+        # Check if log/lvs.log shows an error occurring
+        logfile = self.logdir + '/lvs.log'
+        if os.path.exists(logfile):
+            with open(logfile, 'r') as ifile:
+                for line in ifile:
+                    if 'Synthesis flow stopped' in line:
+                        self.print("LVS failed with error condition (see log file).")
+                        failed = True
+                        break
+
+        if failed:
+            self.toppane.checklist.lvs_result.configure(text="Fail", style='red.TButton')
+        else:
+            self.status = 'gds'
+            self.gui_set_status()
+
+        if self.status == 'gds' and self.lvs_stop.get() == 0:
+            self.qflow_gds()
+
+    def done_gds(self, filename, status):
+        failed = False
+
+        if status == 'stop' or status == 'fail':
+            failed = True
+
+        # Check if log/gdsii.log shows an error occurring
+        logfile = self.logdir + '/gdsii.log'
+        if os.path.exists(logfile):
+            with open(logfile, 'r') as ifile:
+                for line in ifile:
+                    if 'Synthesis flow stopped' in line:
+                        self.print("GDS generation failed with error condition (see log file).")
+                        failed = True
+                        break
+
+        if failed:
+            self.toppane.checklist.gds_result.configure(text="Fail", style='red.TButton')
+        else:
+            self.status = 'clean'
+            self.gui_set_status()
+
+        if self.status == 'clean' and self.gds_stop.get() == 0:
+            self.qflow_cleanup()
+
+    #------------------------------------------------------------------
     def logprint(self, message, doflush=False):
         if self.logfile:
             self.logfile.buffer.write(message.encode('utf-8'))
@@ -3450,13 +3209,13 @@ class QflowManager(ttk.Frame):
             self.logfile = None
 
         # The top-level cell name must match the directory name.
-        if not rootpath:
-            rootpath = os.getcwd()
-        elif os.path.isdir(rootpath):
+        if os.path.isdir(rootpath):
             # Make sure selected project directory is the current
             # working directory or various parts of the script
             # will fail.
             os.chdir(rootpath)
+        else:
+            rootpath = os.getcwd()
        
         # If rootpath is a verilog filename, then the project path
         # is the current working directory by definition.

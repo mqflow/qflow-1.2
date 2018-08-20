@@ -7,11 +7,16 @@
 
 if ($#argv < 2) then
    echo Usage:  display.sh [options] <project_path> <source_name>
+   echo	Options:
+   echo		-g	Use GDS view of standard cells (default auto-detect)
+   echo		-l	Use LEF view of standard cells
+   echo		-d	Use DEF view of layout (default auto-detect)
+   echo		-m	Use magic database view of layout
    exit 1
 endif
 
-# Split out options from the main arguments (no options---placeholder only)
-set argline=(`getopt "" $argv[1-]`)
+# Split out options from the main arguments
+set argline=(`getopt "gldm" $argv[1-]`)
 set cmdargs=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $2}'`
 set argc=`echo $cmdargs | wc -w`
 
@@ -27,8 +32,27 @@ else
    exit 1
 endif
 
+set dogds=-1
+set domag=-1
+
 foreach option (${argline})
    switch (${option})
+      case -g:
+	 set dogds=1
+	 shift
+	 breaksw
+      case -l:
+	 set dogds=0
+	 shift
+	 breaksw
+      case -d:
+	 set domag=0
+	 shift
+	 breaksw
+      case -m:
+	 set domag=1
+	 shift
+	 breaksw
       case --:
 	 break
    endsw
@@ -62,13 +86,29 @@ else
    set magicrcpath=${techdir}/${magicrc}
 endif
 
-# Prepend techdir to leffile unless leffile begins with "/"
-set abspath=`echo ${leffile} | cut -c1`
-if ( "${abspath}" == "/" ) then
-   set lefpath=${leffile}
-else
-   set lefpath=${techdir}/${leffile}
-endif
+# Prepend techdir to each gdsfile unless gdsfile begins with "/"
+set gdspath=""
+foreach f (${gdsfile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${gdsfile}
+   else
+      set p=${techdir}/${gdsfile}
+   endif
+   set gdspath="${gdspath} $p"
+end
+
+# Prepend techdir to each leffile unless leffile begins with "/"
+set lefpath=""
+foreach f (${leffile})
+   set abspath=`echo ${f} | cut -c1`
+   if ( "${abspath}" == "/" ) then
+      set p=${leffile}
+   else
+      set p=${techdir}/${leffile}
+   endif
+   set lefpath="${lefpath} $p"
+end
 
 # Prepend techdir to techleffile unless techleffile begins with "/"
 set abspath=`echo ${techleffile} | cut -c1`
@@ -102,7 +142,15 @@ cd ${layoutdir}
 # and other parameters.
 #---------------------------------------------------
 
-set lefcmd="lef read ${lefpath}"
+set gdscmd="gds vendor true ; gds rescale false"
+foreach gfile ( ${gdspath} )
+set gdscmd="${gdscmd} ; gds read ${gdspath}"
+end
+
+set lefcmd=""
+foreach lfile ( ${lefpath} )
+set lefcmd="${lefcmd} ; lef read ${lefpath}"
+end
 
 if ($techleffile != "") then
    set techlefcmd="lef read ${techlefpath}"
@@ -113,78 +161,49 @@ endif
 # Handle additional .lef files from the hard macros list
 
 set hardlefcmd=""
+set hardgdscmd=""
 if ( ${?hard_macros} ) then
     foreach macro_path ( $hard_macros )
         foreach file ( `ls ${sourcedir}/${macro_path}` )
             if ( ${file:e} == "lef" ) then
                 set hardlefcmd="${hardlefcmd} ; lef read ${sourcedir}/${macro_path}/${file}"
             endif
+            if ( ${file:e} == "gds" ) then
+                set hardgdscmd="${hardgdscmd} ; gds read ${sourcedir}/${macro_path}/${file}"
+            endif
         end
     end
 endif
 
-# Timestamp handling:  If the .mag file is more recent
-# than the .def file, then print a message and do not
-# overwrite.
+# Auto-detect which view to use based on log files.  If migration has not
+# been done, then use the DEF view of the layout, otherwise use the (migrated)
+# magic database view.  If GDS was generated then use the full GDS view of
+# the standard cells;  otherwise use the LEF view of the standard cells.
+# If either option has been forced by option switches, then the option switch
+# overrides the auto-detection.
 
-set docreate=1
-if ( -f ${rootname}.def && -f ${rootname}.mag) then
-   set defstamp=`stat --format="%Y" ${rootname}.def`
-   set magstamp=`stat --format="%Y" ${rootname}.mag`
-   if ( $magstamp > $defstamp ) then
-      echo "Magic database file ${rootname}.mag is more recent than DEF file."
-      echo "If you want to recreate the .mag file, remove or rename the existing one."
-      set docreate=0
+if ($domag == -1) then
+   if (-f ${logdir}/migrate.log) then
+      set domag = 1
+   else
+      set domag = 0
+   endif
+endif
+
+if ($dogds == -1) then
+   if (-f ${logdir}/gdsii.log) then
+      set dogds = 1
+   else
+      set dogds = 0
    endif
 endif
 
 set dispfile="${layoutdir}/load_${rootname}.tcl"
 
-# The following script reads in the DEF file and modifies labels so
-# that they are rotated outward from the cell, since DEF files don't
-# indicate label geometry.
+# Create a script file for loading and displaying the layout
 
-if ( ${docreate} == 1) then
-${bindir}/magic -dnull -noconsole <<EOF
-drc off
-box 0 0 0 0
-snap int
-${techlefcmd}
-${lefcmd}
-${hardlefcmd}
-def read ${rootname}
-select top cell
-select area labels
-setlabel font FreeSans
-setlabel size 0.3um
-box grow s -[box height]
-box grow s 100
-select area labels
-setlabel rotate 90
-setlabel just e
-select top cell
-box height 100
-select area labels
-setlabel rotate 270
-setlabel just w
-select top cell
-box width 100
-select area labels
-setlabel just w
-select top cell
-box grow w -[box width]
-box grow w 100
-select area labels
-setlabel just e
-save ${sourcename}
-quit -noprompt
-EOF
-
-# Create a script file for loading and displaying the
-# layout.
-
-if ( ! -f ${dispfile} ) then
-cat > ${dispfile} << EOF
+if ($domag == 1 && $dogds == 0) then
+   cat > ${dispfile} << EOF
 ${techlefcmd}
 ${lefcmd}
 ${hardlefcmd}
@@ -192,8 +211,37 @@ load ${sourcename}
 select top cell
 expand
 EOF
-endif
-
+else if ($domag == 1 && $dogds == 1) then
+   cat > ${dispfile} << EOF
+${gdscmd}
+${hardgdscmd}
+${techlefcmd}
+${lefcmd}
+${hardlefcmd}
+load ${sourcename}
+select top cell
+expand
+EOF
+else if ($domag == 0 && $dogds == 0) then
+   cat > ${dispfile} << EOF
+${techlefcmd}
+${lefcmd}
+${hardlefcmd}
+def read ${sourcename}
+select top cell
+expand
+EOF
+else if ($domag == 0 && $dogds == 1) then
+   cat > ${dispfile} << EOF
+${gdscmd}
+${hardgdscmd}
+${techlefcmd}
+${lefcmd}
+${hardlefcmd}
+def read ${sourcename}
+select top cell
+expand
+EOF
 endif
 
 # don't die ungracefully if no X display:

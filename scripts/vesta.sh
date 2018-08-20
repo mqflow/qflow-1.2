@@ -79,8 +79,12 @@ else
    set lastlog=${logdir}/place.log
    set synthlog=${logdir}/sta.log
    rm -f ${logdir}/route.log >& /dev/null
-   rm -f ${logdir}/post_sta.log >& /dev/null
 endif
+rm -f ${logdir}/post_sta.log >& /dev/null
+rm -f ${logdir}/migrate.log >& /dev/null
+rm -f ${logdir}/drc.log >& /dev/null
+rm -f ${logdir}/lvs.log >& /dev/null
+rm -f ${logdir}/gdsii.log >& /dev/null
 rm -f ${synthlog} >& /dev/null
 touch ${synthlog}
 set date=`date`

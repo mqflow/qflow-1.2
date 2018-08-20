@@ -47,6 +47,10 @@ set doplace=0
 set dosta=0
 set doroute=0
 set dobackanno=0
+set domigrate=0
+set dolvs=0
+set dodrc=0
+set dogdsii=0
 set doclean=0
 set dodisplay=0
 
@@ -86,6 +90,7 @@ while ($#argv > 0)
 	 shift
 	 breaksw
       case place:
+      case placement:
 	 set doplace=1
 	 set actions=1
 	 shift
@@ -97,12 +102,37 @@ while ($#argv > 0)
 	 shift
 	 breaksw
       case route:
+      case routing:
 	 set doroute=1
 	 set actions=1
 	 shift
 	 breaksw
       case backanno:
+      case backannotate:
 	 set dobackanno=1
+	 set actions=1
+	 shift
+	 breaksw
+      case migrate:
+      case migration:
+	 set domigrate=1
+	 set actions=1
+	 shift
+	 breaksw
+      case lvs:
+	 set dolvs=1
+	 set actions=1
+	 shift
+	 breaksw
+      case drc:
+	 set dodrc=1
+	 set actions=1
+	 shift
+	 breaksw
+      case gdsii:
+      case gds:
+	 set dogdsii=1
+	 set actions=1
 	 shift
 	 breaksw
       case build:
@@ -113,7 +143,8 @@ while ($#argv > 0)
 	 set actions=1
 	 shift
 	 breaksw
-      case all:
+      case nocheck:
+      case nochecks:
 	 set dosynth=1
 	 set doplace=1
 	 set dosta=1
@@ -124,13 +155,30 @@ while ($#argv > 0)
 	 set actions=1
 	 shift
 	 breaksw
+      case all:
+	 set dosynth=1
+	 set doplace=1
+	 set dosta=1
+	 set doroute=1
+	 set dobackanno=1
+	 set domigrate=1
+	 set dolvs=1
+	 set dodrc=1
+	 set dogdsii=1
+	 set doclean=1
+	 set dodisplay=1
+	 set actions=1
+	 shift
+	 breaksw
       case clean:
       case cleanup:
 	 set doclean=1
+	 set actions=1
 	 shift
 	 breaksw
       case display:
 	 set dodisplay=1
+	 set actions=1
 	 shift
 	 breaksw
       case buffer:
@@ -179,16 +227,22 @@ endif
 
 if ($dohelp == 1 || $#argv != 0) then
    echo "Usage: qflow [processes] [options] <module_name>"
-   echo "Processes:  synthesize			Synthesize verilog source"
-   echo "            place			Run initial placement"
+   echo "Processes:  synthesize		Synthesize verilog source"
+   echo "            place		Run initial placement"
    echo "            sta			Static timing analysis"
-   echo "            route			Run placement and route"
-   echo "            backanno			Post-route timing analysis"
-   echo "            clean			Remove temporary working files"
-   echo "            display			Display routed result"
+   echo "            route		Run placement and route"
+   echo "            backanno		Post-route timing analysis"
+   echo "            migrate		Generate database and netlists for DRC and LVS"
+   echo "            drc			Run DRC check"
+   echo "            lvs			Run LVS comparison"
+   echo "            gdsii		Generate GDSII output"
+   echo "            clean		Remove temporary working files"
    echo ""
-   echo "            build			Run scripts synthesize to route"
-   echo "            all			Run scripts synthesize to display"
+   echo "            display		Display routed result"
+   echo ""
+   echo "            build		Run scripts synthesize to backanno"
+   echo "            nochecks		Run scripts synthesize to backanno and display"
+   echo "            all			Run scripts synthesize to gdsii and display"
    echo ""
    echo "            gui			Run the qflow interactive GUI"
    echo ""
@@ -522,6 +576,26 @@ if ($dobackanno == 0) then
    echo -n "# " >> ${execfile}
 endif
 echo "${scriptdir}/vesta.sh -d ${projectpath} ${modulename} || exit 1" >> ${execfile}
+
+if ($domigrate == 0) then
+   echo -n "# " >> ${execfile}
+endif
+echo "${scriptdir}/migrate.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+
+if ($dodrc == 0) then
+   echo -n "# " >> ${execfile}
+endif
+echo "${scriptdir}/drc.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+
+if ($dolvs == 0) then
+   echo -n "# " >> ${execfile}
+endif
+echo "${scriptdir}/lvs.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+
+if ($dogdsii == 0) then
+   echo -n "# " >> ${execfile}
+endif
+echo "${scriptdir}/gdsii.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
 
 if ($doclean == 0) then
    echo -n "# " >> ${execfile}

@@ -113,7 +113,11 @@ rm -f ${rootname}.txt ${rootname}.info
 
 rm -f ${rootname}.pin ${rootname}.pl1 ${rootname}.pl2
 rm -f ${rootname}.cfg
-rm -f antenna.out fillcells.txt
+rm -f antenna.out fillcells.txt fail.out
+
+rm -f run_drc_map9v3.tcl
+rm -f generate_gds_map9v3.tcl
+rm -f migrate_map9v3.tcl
 
 # rm -f ${origname}_unroute.def
 
