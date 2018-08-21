@@ -189,10 +189,11 @@ else
 #------------------------------------------------------------------
 
    echo "Running qrouter $version"
-   echo "qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} -d '${rootname}.rc' ${qrouter_options} ${rootname}" \
+   echo "qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} -d '${rootname}_route.rc' ${qrouter_options} ${rootname}" \
 		 |& tee -a ${synthlog}
-   ${bindir}/qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} -d '${rootname}.rc' \
-		${qrouter_options} ${rootname} |& tee -a ${synthlog} | \
+   ${bindir}/qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} \
+		-d '${rootname}_route.rc' ${qrouter_options} ${rootname} \
+		|& tee -a ${synthlog} | \
 		grep - -e Failed\ net -e fail -e Progress -e remaining.\*00\$ \
 		-e remaining:\ \[1-9\]0\\\?\$ -e \\\*\\\*\\\*
 endif
@@ -209,9 +210,9 @@ if ( !( -f ${rootname}_route.def || ( -f ${rootname}_route.def && -M ${rootname}
    exit 1
 endif
 
-if ( !( -f ${rootname}.rc || ( -f ${rootname}.rc && -M ${rootname}.rc \
-		< -M ${rootname}.def ))) then
-   echo "qrouter failure:  No delay file ${rootname}.rc." |& tee -a ${synthlog}
+if ( !( -f ${rootname}_route.rc || ( -f ${rootname}_route.rc && \
+		-M ${rootname}_route.rc < -M ${rootname}.def ))) then
+   echo "qrouter failure:  No delay file ${rootname}_route.rc." |& tee -a ${synthlog}
    echo "Premature exit." |& tee -a ${synthlog}
    echo "Synthesis flow stopped due to error condition." >> ${synthlog}
    exit 1
@@ -295,6 +296,11 @@ endif
 if ( -f ${rootname}_route.def ) then
    rm -f ${rootname}.def
    mv ${rootname}_route.def ${rootname}.def
+endif
+
+if ( -f ${rootname}_route.rc ) then
+   rm -f ${rootname}.rc
+   mv ${rootname}_route.rc ${rootname}.rc
 endif
 
 #------------------------------------------------------------
