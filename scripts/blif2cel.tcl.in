@@ -701,6 +701,7 @@ set py [expr int($pitchy / 2)]
 set fnet [open $bliffile r]
 set mode none
 set padnum 1
+set pinList {}
 while {[gets $fnet line] >= 0} {
     if [regexp {^[ \t]*\.inputs[ \t]+(.*)$} $line lmatch rest] {
 	set mode inputs
@@ -720,11 +721,16 @@ while {[gets $fnet line] >= 0} {
 
     if {$mode == "inputs" || $mode == "outputs"} {
 	foreach pinname $line {
-	    puts $fcel "pad $padnum name twpin_$pinname"
-	    puts $fcel "corners 4 -$px -$py -$px $py $px $py $px -$py"
-	    puts $fcel "pin name $pinname signal $pinname layer 1 0 0"
-	    puts $fcel ""
-	    incr padnum
+	    if {$pinname ni $pinList} {
+		lappend pinList $pinname
+		puts $fcel "pad $padnum name twpin_$pinname"
+		puts $fcel "corners 4 -$px -$py -$px $py $px $py $px -$py"
+		puts $fcel "pin name $pinname signal $pinname layer 1 0 0"
+		puts $fcel ""
+		incr padnum
+	    } else {
+		puts stdout "Found duplicate pin name $pinname while processing $mode"
+	    }
 	}
     }
 }

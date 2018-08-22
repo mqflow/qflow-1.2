@@ -544,7 +544,8 @@ read_liberty(char *libfile, char *pattern)
 			exit(1);
 		    }
 		}
-		else if (!strcasecmp(token, "lu_table_template")) {
+		else if (!strcasecmp(token, "lu_table_template") ||
+			!strcasecmp(token, "power_lut_template")) {
 		    // Read in template information;
 		    newtable = (LUTable *)malloc(sizeof(LUTable));
 		    newtable->var1 = NULL;
