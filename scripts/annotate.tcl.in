@@ -180,7 +180,7 @@ if {${vlog2name} != ${vlogname}} {
 	    set cellname [lindex $netchange 1]
 	    set pinname [lindex $netchange 2]
 	    if {${pinname} != "-" && ${pinname} != ""} {
-	       puts $fvout "${cellname} ${instname} ( .${vddnet}(${vddnet}), .${gndnet}(${gndnet}) .${pinname}(${netname}) );"
+	       puts $fvout "${cellname} ${instname} ( .${vddnet}(${vddnet}), .${gndnet}(${gndnet}), .${pinname}(${netname}) );"
 	    } else {
 	       puts $fvout "${cellname} ${instname} ( .${vddnet}(${vddnet}), .${gndnet}(${gndnet}) );"
 	    }
