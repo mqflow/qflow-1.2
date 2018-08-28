@@ -3400,7 +3400,7 @@ if __name__ == '__main__':
 
     if numargs <= 2:
         app.print('No project set from command line.  Will check current directory.')
-        app.set_project(sys.getcwd())
+        app.set_project(os.getcwd())
 
     elif numargs == 3:
         # 1-argument list = file name (file root name = module name)
