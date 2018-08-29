@@ -192,7 +192,7 @@ else
    echo "qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} -d '${rootname}_route.rc' ${qrouter_options} ${rootname}" \
 		 |& tee -a ${synthlog}
    ${bindir}/qrouter -c ${rootname}.cfg -p ${vddnet} -g ${gndnet} \
-		-d '${rootname}_route.rc' ${qrouter_options} ${rootname} \
+		-d "${rootname}_route.rc" ${qrouter_options} ${rootname} \
 		|& tee -a ${synthlog} | \
 		grep - -e Failed\ net -e fail -e Progress -e remaining.\*00\$ \
 		-e remaining:\ \[1-9\]0\\\?\$ -e \\\*\\\*\\\*
