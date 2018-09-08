@@ -205,13 +205,36 @@ if ( !( -f ${layoutdir}/${rootname}.cel || \
    exit 1
 endif
 
+#---------------------------------------------------------------------
+# Move to the layout directory
+#---------------------------------------------------------------------
+
+cd ${layoutdir}
+
+#---------------------------------------------------------------------
+# Check if a .cel1 file exists and needs to be prepended to .cel
+# This file may contain hard macro definitions that assert blockages
+# to the placement.
+#---------------------------------------------------------------------
+
+if ( -f ${rootname}.cel1 ) then
+   echo "Preparing layout blockages from ${rootname}.cel1" |& tee -a ${synthlog}
+   mv ${rootname}.cel ${rootname}_tmp.cel
+   cp ${rootname}.cel1 ${rootname}.cel
+   cat ${rootname}_tmp.cel >> ${rootname}.cel
+   rm -f ${rootname}_tmp.cel
+else
+   echo -n "No ${rootname}.cel1 file found for project. . . " \
+		|& tee -a ${synthlog}
+   echo "no partial blockages to apply to layout." |& tee -a ${synthlog}
+endif
+
+
 #-------------------------------------------------------------------------
 # If placement option "initial_density" is set, run the decongest
 # script.  This will annotate the .cel file with fill cells to pad
 # out the area to the specified density.
 #-------------------------------------------------------------------------
-
-cd ${layoutdir}
 
 # Set value ${fillers} to be equal either to a single cell name if
 # only one of (decapcell, antennacell, fillcell) is defined, or a
@@ -359,6 +382,25 @@ if ( !( -f ${rootname}.pin || \
    echo "Premature exit." |& tee -a ${synthlog}
    echo "Synthesis flow stopped due to error condition." >> ${synthlog}
    exit 1
+endif
+
+#---------------------------------------------------
+# Remove blockage hardcells defined in .cel1
+#---------------------------------------------------
+
+if ( (-f ${rootname}.cel1) && (-f ${scriptdir}/removeblocks.tcl) ) then
+
+      echo "Running removeblocks to remove partical blockage references" \
+		|& tee -a ${synthlog}
+      echo "removeblocks.tcl ${rootname}" \
+		|& tee -a ${synthlog}
+
+      ${scriptdir}/removeblocks.tcl ${rootname} >>& ${synthlog}
+      set errcond = $status
+      if ( ${errcond} != 0 ) then
+	 echo "removeblocks.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+	 echo "Ignoring. . . this may cause errors downstream." |& tee -a ${synthlog}
+      endif
 endif
 
 #---------------------------------------------------

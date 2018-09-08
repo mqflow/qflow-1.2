@@ -10,7 +10,7 @@ LDFLAGS =
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 54
+REVISION = 60
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
@@ -25,6 +25,7 @@ TCL_SCRIPTS += place2net2.tcl ypostproc.tcl ybuffer.tcl
 TCL_SCRIPTS += decongest.tcl addspacers.tcl getfillcell.tcl
 TCL_SCRIPTS += getantennacell.tcl blifanno.tcl annotate.tcl
 TCL_SCRIPTS += powerbus.tcl getpowerground.tcl arrangepins.tcl
+TCL_SCRIPTS += removeblocks.tcl
 PYTHON_SCRIPTS = spi2xspice.py consoletext.py pinmanager.py
 PYTHON_SCRIPTS += tksimpledialog.py helpwindow.py qflow_manager.py
 PYTHON_SCRIPTS += textreport.py tooltip.py count_lvs.py
@@ -122,6 +123,9 @@ powerbus.tcl: powerbus.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
 
 addspacers.tcl: addspacers.tcl.in
+	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
+
+removeblocks.tcl: removeblocks.tcl.in
 	sed -e 's#TCLSH_PATH#$(TCLSH_PATH)#' $< > $@
 
 getpowerground.tcl: getpowerground.tcl.in
