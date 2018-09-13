@@ -76,3 +76,8 @@ set gdsfile=gscl45nm.gds	;# GDS database of standard cells
 set fanout_options="-l 200 -c 50"	;# blifFanout target maximum latency
 					;# per gate 200ps, output load set to 50fF
 
+set base_units="1000"		;# Use nanometer base units instead of centimicrons
+set vesta_options="--summary reports --long"
+set num_layers=6		;# Normally restrict routing to 6 layers
+set addspacers_options="-stripe 1.7 50.0 PG"
+

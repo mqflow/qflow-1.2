@@ -46,6 +46,8 @@ set scale 1
 set antennapin -
 set antennacell -
 
+# Note:  Accept "units=" option as equivalent to "scale=" with scale * 100
+
 while {$argc > 2} {
    incr argc -1
    set testopt [lindex $argv $argc]
@@ -56,6 +58,7 @@ while {$argc > 2} {
       switch $key {
 	 layers {set numlayers $value}
 	 scale {set scale $value}
+	 units {set scale [expr {$value / 100.0}]}
 	 antennapin {set antennapin $value}
 	 antennacell {set antennacell $value}
 	 - {puts stdout "Unknown place2def.tcl option \"$key\", ignoring."}
@@ -187,25 +190,49 @@ if [catch {open $infoname r} finf] {
    if {($numlayers == 0) || ($numlayers > $i)} {set numlayers $i}
 }
 
+# Deal with manufacturing grids that are less than 1 centimicron, so
+# that all values in the DEF file remain integer.  The cheap way is
+# just to multiply up by 10.  Preferably, the technology setup sets
+# the scalefactor.
+
+if {$metal1(orient) == "horizontal"} {
+   set halfpitchx [expr 50 * $metal2(pitch)]
+} else {
+   set halfpitchx [expr 50 * $metal1(pitch)]
+}
+set nanopitch [expr int(round($halfpitchx * 10))]
+if {($scale == 1) && ([expr $nanopitch % 10] != 0)} {
+    set multiplier 10
+    set centiscale 1000
+    puts stdout "DEF database: nanometers"
+    puts $fdef "UNITS DISTANCE MICRONS 1000 ;"
+} else {
+    set multiplier 1
+    set centiscale [expr {100 * $scale}]
+    puts stdout "DEF database: centimicrons"
+    puts $fdef "UNITS DISTANCE MICRONS $centiscale ;"
+}
+puts $fdef ""
+
 # NOTE:  Treating all pitches the same for all layers in the same
 # direction.  This is good for doing various calculations on cell
 # and pin positions.  The track positions themselves will be placed
 # according to the given route layer pitch.
 
 if {$metal1(orient) == "horizontal"} {
-   set pitchx [expr 100 * $metal2(pitch)]
-   set pitchy [expr 100 * $metal1(pitch)]
-   set offsetx [expr 100 * $metal2(offset)]
-   set offsety [expr 100 * $metal1(offset)]
-   set widthx [expr 100 * $metal2(width)]
-   set widthy [expr 100 * $metal1(width)]
+   set pitchx [expr $centiscale * $metal2(pitch)]
+   set pitchy [expr $centiscale * $metal1(pitch)]
+   set offsetx [expr $centiscale * $metal2(offset)]
+   set offsety [expr $centiscale * $metal1(offset)]
+   set widthx [expr $centiscale * $metal2(width)]
+   set widthy [expr $centiscale * $metal1(width)]
 } else {
-   set pitchx [expr 100 * $metal1(pitch)]
-   set pitchy [expr 100 * $metal2(pitch)]
-   set offsetx [expr 100 * $metal1(offset)]
-   set offsety [expr 100 * $metal2(offset)]
-   set widthx [expr 100 * $metal1(width)]
-   set widthy [expr 100 * $metal2(width)]
+   set pitchx [expr $centiscale * $metal1(pitch)]
+   set pitchy [expr $centiscale * $metal2(pitch)]
+   set offsetx [expr $centiscale * $metal1(offset)]
+   set offsety [expr $centiscale * $metal2(offset)]
+   set widthx [expr $centiscale * $metal1(width)]
+   set widthy [expr $centiscale * $metal2(width)]
 }
 
 # Add numlayers to the configuration file now that we know it
@@ -214,24 +241,6 @@ set halfpitchx [expr $pitchx / 2];
 set halfpitchy [expr $pitchy / 2];
 set halfwidthx [expr $widthx / 2];
 set halfwidthy [expr $widthy / 2];
-
-# Deal with manufacturing grids that are less than 1 centimicron, so
-# that all values in the DEF file remain integer.  The cheap way is
-# just to multiply up by 10.
-
-set nanopitch [expr int(round($halfpitchx * 10))]
-if {[expr $nanopitch % 10] != 0} {
-    set multiplier 10
-    puts stdout "DEF database: nanometers"
-    puts $fdef "UNITS DISTANCE MICRONS 1000 ;"
-} else {
-    set multiplier $scale
-    set centiscale [expr {100 * $scale}]
-    puts stdout "DEF database: centimicrons"
-    puts $fdef "UNITS DISTANCE MICRONS $centiscale ;"
-}
-puts $fdef ""
-
 
 set xbot 1000
 set ybot 1000 
@@ -338,7 +347,7 @@ set height [expr $dieytop - $dieybot]
 
 for {set i 1} {$i <= $numlayers} {incr i} {
    set mname [subst \$metal${i}(name)]
-   set mpitch [expr 100 * [subst \$metal${i}(pitch)]]
+   set mpitch [expr ${centiscale} * [subst \$metal${i}(pitch)]]
    set outmpitch [expr int($mpitch * $multiplier)]
    if {[subst \$metal${i}(orient)] == "vertical"} {
       set xtracks [expr 1 + int($width / $mpitch)];
@@ -370,14 +379,14 @@ if {$metal1(orient) == "horizontal"} {
 
 # generate obstruction around pin areas, so these will not have vias
 # dropped on top of the pin labels (convert values to microns)
-set diexbot_um [expr ($diexbot - $pitchx) / 100.0]
-set diextop_um [expr ($diextop + $pitchx) / 100.0]
-set dieybot_um [expr ($dieybot - $pitchy) / 100.0]
-set dieytop_um [expr ($dieytop + $pitchy) / 100.0]
-set corexbot_um [expr $corexbot / 100.0]
-set corextop_um [expr ($corextop + $pitchx) / 100.0]
-set coreybot_um [expr $coreybot / 100.0]
-set coreytop_um [expr ($coreytop + $pitchy) / 100.0]
+set diexbot_um [expr ($diexbot - $pitchx) / ($centiscale + 0.0)]
+set diextop_um [expr ($diextop + $pitchx) / ($centiscale + 0.0)]
+set dieybot_um [expr ($dieybot - $pitchy) / ($centiscale + 0.0)]
+set dieytop_um [expr ($dieytop + $pitchy) / ($centiscale + 0.0)]
+set corexbot_um [expr $corexbot / ($centiscale + 0.0)]
+set corextop_um [expr ($corextop + $pitchx) / ($centiscale + 0.0)]
+set coreybot_um [expr $coreybot / ($centiscale + 0.0)]
+set coreytop_um [expr ($coreytop + $pitchy) / ($centiscale + 0.0)]
 
 #-----------------------------------------------------------------
 # Finish route configuration file

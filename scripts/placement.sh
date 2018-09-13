@@ -177,10 +177,18 @@ if ( ${?hard_macros} ) then
     end
 endif
 
+# Pass base units (normally 100 for centimicrons (default) or 1000 for nanometers)
+if ( ${?base_units} ) then
+   set baseunits="${base_units}"
+else
+   set baseunits="100"
+endif
+
 echo "Running blif2cel to generate input files for graywolf" |& tee -a ${synthlog}
-echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif ${lefoptions} --cel ${layoutdir}/${rootname}.cel" |& tee -a ${synthlog}
+echo "blif2cel.tcl --blif ${synthdir}/${rootname}.blif ${lefoptions} --cel ${layoutdir}/${rootname}.cel --units ${baseunits}" |& tee -a ${synthlog}
 ${scriptdir}/blif2cel.tcl --blif ${synthdir}/${rootname}.blif \
-	${lefoptions} --cel ${layoutdir}/${rootname}.cel >>& ${synthlog}
+	${lefoptions} --cel ${layoutdir}/${rootname}.cel --units ${baseunits} \
+	>>& ${synthlog}
 
 set errcond = $status
 if ( ${errcond} != 0 ) then
@@ -497,9 +505,15 @@ if ($makedef == 1) then
    endif
 
    if ( !( ${?place2def_options} )) then
-      set place2def_options = "$antenna_opt"
+      set place2def_options="$antenna_opt"
    else
-      set place2def_options = "$antenna_opt $place2def_options"
+      set place2def_options="$antenna_opt $place2def_options"
+   endif
+
+   if ( ${?base_units} ) then
+      set tech_scale="units=${base_units}"
+   else
+      set tech_scale=""
    endif
 
    # Run place2def to turn the GrayWolf output into a DEF file
@@ -507,10 +521,10 @@ if ($makedef == 1) then
    echo "Running place2def to translate graywolf output to DEF format." \
 		|& tee -a ${synthlog}
    if ( ${?route_layers} ) then
-      echo "place2def.tcl $rootname $usefillcell ${route_layers} ${place2def_options}" \
+      echo "place2def.tcl $rootname $usefillcell ${route_layers} ${tech_scale} ${place2def_options}" \
 		|& tee -a ${synthlog}
       ${scriptdir}/place2def.tcl $rootname $usefillcell ${route_layers} \
-		${place2def_options} >>& ${synthlog}
+		${tech_scale} ${place2def_options} >>& ${synthlog}
       set errcond = $status
       if ( ${errcond} != 0 ) then
 	 echo "place2def.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
@@ -519,10 +533,10 @@ if ($makedef == 1) then
 	 exit 1
       endif
    else
-      echo "place2def.tcl $rootname $usefillcell ${place2def_options}" \
+      echo "place2def.tcl $rootname $usefillcell ${tech_scale} ${place2def_options}" \
 		|& tee -a ${synthlog}
-      ${scriptdir}/place2def.tcl $rootname $usefillcell ${place2def_options} \
-		>>& ${synthlog}
+      ${scriptdir}/place2def.tcl $rootname $usefillcell ${tech_scale} \
+		${place2def_options} >>& ${synthlog}
    endif
 
    #---------------------------------------------------------------------

@@ -54,6 +54,10 @@ while {$index < $arglen} {
 	    set args(cel) [lindex $argv [incr index]]
 	}
 
+	--units {
+	    set units [lindex $argv [incr index]]
+	}
+
 	default  {
 	    set filename [lindex $argv $index]
 	}
