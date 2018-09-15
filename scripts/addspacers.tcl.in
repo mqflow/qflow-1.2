@@ -28,9 +28,9 @@
 namespace path {::tcl::mathop ::tcl::mathfunc}
 
 if {$argc < 3} {
-    puts stdout "Usage:  addspacers [<options>] <project_name> <lef_file> <fill_cell>"
+    puts stdout "Usage:  addspacers \[<options>\] <project_name> <lef_file> <fill_cell>"
     puts stdout "Options:"
-    puts stdout "  -stripe <width> <pitch> <pattern> [-nostretch] [-techlef <tech.lef>]"
+    puts stdout "  -stripe <width> <pitch> <pattern> \[-nostretch\] \[-techlef <tech.lef>\]"
     exit 0
 }
 
