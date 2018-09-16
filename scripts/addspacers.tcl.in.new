@@ -51,6 +51,7 @@ set hardlef []
 set pitchx 0
 set layers {}
 set vias {}
+set viarules {}
 
 while true {
     set arg0 [lindex $argv $argidx]
@@ -153,6 +154,67 @@ set fdef [open $defname r]
 # Multiply stripe width and pitch values by units to get output values
 set stripewidth [* $units $stripewidth]
 set stripepitch [* $units $stripepitch]
+
+#----------------------------------------------------------------------
+# Parse a viarule section for generating power bus connections
+# Cut layer has "RECT" and "SPACING".  Metal layers have "ENCLOSURE"
+# (new style) or "OVERHANG" (old style).  The old style is unclear,
+# so only support what's in the OSU standard cells, which have overhang
+# in all directions (METALOVERHANG is zero).  May add support for more
+# varieties if the interpretation of the unclear syntax is known.
+#----------------------------------------------------------------------
+
+proc parse_viarule {leffile viarulename} {
+    global units
+
+    set viarulerec [dict create]
+    dict set viarulerec name $viarulename
+    set llx 0
+    set lly 0
+    set urx 0
+    set ury 0
+    set xspace 0
+    set yspace 0
+
+    while {[gets $leffile line] >= 0} {
+	if [regexp {[ \t]*LAYER[ \t]+([^ \t]+)[ \t]*;} $line lmatch layername] {
+	    # Pick up layername
+	    continue
+	} elseif [regexp {[ \t]*RECT[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]*;} $line lmatch llx lly urx ury] {
+	    set llx [* $llx $units]
+	    set lly [* $lly $units]
+	    set urx [* $urx $units]
+	    set ury [* $ury $units]
+	    dict set viarulerec ${layername} [list $llx $lly $urx $ury $xspace $yspace]
+	} elseif [regexp {[ \t]*SPACING[ \t]+([^ \t]+)[ \t]+BY[ \t]+([^ \t]+)[ \t]*;} $line lmatch xspace yspace] {
+            set xspace [* $xspace $units]
+            set yspace [* $yspace $units]
+	    dict set viarulerec ${layername} [list $llx $lly $urx $ury $xspace $yspace]
+	} elseif [regexp {[ \t]*METALOVERHANG[ \t]+([^ \t]+)[ \t]*;} $line lmatch overhang] {
+            # Ignore this.
+            continue
+	} elseif [regexp {[ \t]*OVERHANG[ \t]+([^ \t]+)[ \t]*;} $line lmatch overhang] {
+            # NOTE:  Assuming METALOVERHANG is 0 and OVERHANG is on all sides.
+            set overhang [* $overhang $units]
+	    dict set viarulerec ${layername} [list $overhang $overhang]
+	} elseif [regexp {[ \t]*ENCLOSURE[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]*;} $line lmatch xencl yencl] {
+            set xencl [* $xencl $units]
+            set yencl [* $yencl $units]
+	    dict set viarulerec ${layername} [list $xencl $yencl]
+	} elseif [regexp {[ \t]*END[ \t]+([^ \t]+)[ \t]*$} $line lmatch viaruletest] {
+	    if {"$viaruletest" != "$viarulename"} {
+	        puts -nonewline stderr "Unexpected END statement $line while "
+	        puts stderr "reading viarule $viarulename"
+	    }
+	    break
+	}
+    }
+    if {[dict size $viarulerec] == 0} {
+	return ""
+    } else {
+	return $viarulerec
+    }
+}
 
 
 #----------------------------------------------------------------
@@ -468,7 +530,7 @@ proc parse_macro {leffile macroname} {
 #-----------------------------------------------------------------
 
 proc read_lef {flef fillcell} {
-    global layers vias
+    global layers vias viarules
     set layernum 0
     set fillcells {}
     while {[gets $flef line] >= 0} {
@@ -490,7 +552,10 @@ proc read_lef {flef fillcell} {
 	} elseif [regexp {[ \t]*VIA[ \t]+([^ \t]+)} $line lmatch vianame] {
 	    lappend vias [parse_via $flef $vianame]
 	} elseif [regexp {[ \t]*VIARULE[ \t]+([^ \t]+)} $line lmatch viarulename] {
-	    skip_section $flef $viarulename
+	    set result [parse_viarule $flef $viarulename]
+	    if {$result != ""} {
+		lappend viarules $result
+	    }
 	} elseif [regexp {[ \t]*SITE[ \t]+([^ \t]+)[ \t]*$} $line lmatch sitename] {
 	    skip_section $flef $sitename
 	} elseif [regexp {[ \t]*UNITS[ \t]*$} $line lmatch] {
@@ -678,12 +743,15 @@ proc get_inputpin {macroname} {
 
 #-----------------------------------------------------------------
 # Write entries for SPECIALNETS corresponding to the power and
-# ground stripes
+# ground stripes.  If we have VIARULE statements, then the power
+# posts are constructed from the VIARULE vias.  Where layers
+# are missing, or if there were no VIARULE statements, then the
+# power posts are constructed from known VIA types.
 #-----------------------------------------------------------------
 
 proc write_special {stripeinfo stripefills stripewidth stripepattern
 		rows dieylow dieyhigh fanno} {
-    global fmin vias layers pitchx
+    global fmin vias viarules layers pitchx
 
     # Take 1st fill cell and find name of power and ground buses
     set fillmacro [lindex $stripefills 0]
@@ -730,10 +798,10 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
     }
 
     # Parse vias for the smallest size via on each metal layer (except top)
-    # TO-DO:  Read VIAGEN entries and generate a via entry the width of the
-    # power stripe.
+    # These will only be used if no viagen statement exists.
 
     set basevias {}
+    set baseviarules {}
     set viaoffsets {}
     set viaheights {}
     set viaspaces {}
@@ -768,98 +836,125 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 	set bestheight 0
 	set bestcutwidth 0
 	set bestcutsep 0
-	foreach via $vias {
-	    set areab 0
-	    set areat 0
-	    foreach vlayer [dict keys $via] {
-		if {$vlayer == $blayer} {
-		    set coords [dict get $via $vlayer]
-		    set llx [lindex $coords 0]
-		    set lly [lindex $coords 1]
-		    set urx [lindex $coords 2]
-		    set ury [lindex $coords 3]
-		    set widthb [expr ($urx - $llx)]
-		    set heightb [expr ($ury - $lly)]
-		    set areab [expr $widthb * $heightb]
-		} elseif {$vlayer == $tlayer} {
-		    set coords [dict get $via $vlayer]
-		    set llx [lindex $coords 0]
-		    set lly [lindex $coords 1]
-		    set urx [lindex $coords 2]
-		    set ury [lindex $coords 3]
-		    set widtht [expr ($urx - $llx)]
-		    set heightt [expr ($ury - $lly)]
-		    set areat [expr $widtht * $heightt]
+
+	# First look in the VIARULE records, then fall back on VIA records.
+
+	foreach viarule $viarules {
+	    set viarulename [dict get $viarule name]
+            set match 0
+	    dict for {layername viarulespec} $viarule {
+		if {$layername == $tlayer} {
+		    incr match
+		} elseif {$layername == $blayer} {
+		    incr match
 		}
 	    }
-	    if {($areab > 0) && ($areat > 0)} {
-		set area [max $areab $areat]
-		set width [max $widthb $widtht]
-		set height [max $heightb $heightt]
-		if {($bestvia == "") || ($area < $bestarea)} {
-		    set bestvia [dict get $via name]
-		    set bestarea $area
-		    set bestwidth $width
-		    set bestheight $height
-		    if {$cwidth == 0} {
-			set coords [dict get $via $clayer]
+	    if {$match == 2} {		;# Found matching VIARULE
+		lappend baseviarules ${viarulename}
+		lappend basevias ""
+		lappend viaoffsets 0
+		lappend viaheights 0
+		lappend viaspaces 0
+		lappend nvias 0
+		break
+	    }
+	}
+
+	if {$match != 2} {
+	    foreach via $vias {
+		set areab 0
+		set areat 0
+		foreach vlayer [dict keys $via] {
+		    if {$vlayer == $blayer} {
+			set coords [dict get $via $vlayer]
 			set llx [lindex $coords 0]
+			set lly [lindex $coords 1]
 			set urx [lindex $coords 2]
-			set bestcutwidth [- $urx $llx]
-		    } else {
-			set bestcutwidth $cwidth
+			set ury [lindex $coords 3]
+			set widthb [expr ($urx - $llx)]
+			set heightb [expr ($ury - $lly)]
+			set areab [expr $widthb * $heightb]
+		    } elseif {$vlayer == $tlayer} {
+			set coords [dict get $via $vlayer]
+			set llx [lindex $coords 0]
+			set lly [lindex $coords 1]
+			set urx [lindex $coords 2]
+			set ury [lindex $coords 3]
+			set widtht [expr ($urx - $llx)]
+			set heightt [expr ($ury - $lly)]
+			set areat [expr $widtht * $heightt]
 		    }
-		    if {$cspace != 0} {
-			set bestcutsep $cspace
+		}
+		if {($areab > 0) && ($areat > 0)} {
+		    set area [max $areab $areat]
+		    set width [max $widthb $widtht]
+		    set height [max $heightb $heightt]
+		    if {($bestvia == "") || ($area < $bestarea)} {
+			set bestvia [dict get $via name]
+			set bestarea $area
+			set bestwidth $width
+			set bestheight $height
+			if {$cwidth == 0} {
+			    set coords [dict get $via $clayer]
+			    set llx [lindex $coords 0]
+			    set urx [lindex $coords 2]
+			    set bestcutwidth [- $urx $llx]
+			} else {
+			    set bestcutwidth $cwidth
+			}
+			if {$cspace != 0} {
+			    set bestcutsep $cspace
+			}
 		    }
 		}
 	    }
-	}
 
-	if {$bestvia == ""} {
-	    puts stdout "Warning:  no via found between $blayer and $tlayer"
-	    continue
-	}
-
-	if {$bestcutsep == 0} {
-	    # If no cut spacing info, assume that abutting vias satisfy
-	    # the spacing minimum.
-	    set bestcutsep [- $bestwidth $cwidth]
-	}
-
-	# Find the minimum separation between these vias.  Find the
-	# minimum separation of the cuts within the via, and then
-	# use that to determine 
-
-	lappend basevias $bestvia
-	lappend viaheights $bestheight
-	set vspace [expr $bestcutwidth + $bestcutsep]
-	if {$vspace > 0} {
-	    lappend viaspaces $vspace
-
-	    # Two computations:  One is simply the available with divided by
-	    # the spacing between contacts, with half the space on either
-	    # side.  However, if there is a metal overlap that is large,
-	    # then the overlap will limit the number of vias, so take the
-	    # smaller of the two calculations.
-
-	    set numvias1 [expr int(floor($stripewidth / $vspace))]
-	    set numvias2 [expr int(floor((($stripewidth - $bestwidth) / ($bestcutwidth + $bestcutsep)) + 1))]
-	    set numvias [expr min($numvias1, $numvias2)]
-	    if {$numvias2 < $numvias1} {
-		set voffset [/ [+ $vspace $bestwidth] 2]
-	    } else {
-		set voffset [/ $vspace 2]
+	    if {$bestvia == ""} {
+		puts stdout "Warning:  no via found between $blayer and $tlayer"
+		continue
 	    }
-	    lappend viaoffsets $voffset
-	    lappend nvias $numvias
 
-	    puts stdout "Stripe width $stripewidth fits $numvias $bestvia at cut width $bestcutwidth separation $bestcutsep"
-	} else {
-	    puts stdout "Warning: couldn't get cut size and spacing for via $bestvia"
-	    lappend viaspaces $bestwidth
-	    lappend nvias [expr floor($stripewidth / $bestwidth)]
-	    lappend viaoffsets [/ $bestwidth 2]
+	    if {$bestcutsep == 0} {
+		# If no cut spacing info, assume that abutting vias satisfy
+		# the spacing minimum.
+		set bestcutsep [- $bestwidth $cwidth]
+	    }
+
+	    # Find the minimum separation between these vias.  Find the
+	    # minimum separation of the cuts within the via, and then
+	    # use that to determine the number of vias across a power bus
+
+	    lappend basevias $bestvia
+	    lappend baseviarules ""
+	    lappend viaheights $bestheight
+	    set vspace [expr $bestcutwidth + $bestcutsep]
+	    if {$vspace > 0} {
+		lappend viaspaces $vspace
+
+		# Two computations:  One is simply the available with divided by
+		# the spacing between contacts, with half the space on either
+		# side.  However, if there is a metal overlap that is large,
+		# then the overlap will limit the number of vias, so take the
+		# smaller of the two calculations.
+
+		set numvias1 [expr int(floor($stripewidth / $vspace))]
+		set numvias2 [expr int(floor((($stripewidth - $bestwidth) / ($bestcutwidth + $bestcutsep)) + 1))]
+		set numvias [expr min($numvias1, $numvias2)]
+		if {$numvias2 < $numvias1} {
+		    set voffset [/ [+ $vspace $bestwidth] 2]
+		} else {
+		    set voffset [/ $vspace 2]
+		}
+		lappend viaoffsets $voffset
+		lappend nvias $numvias
+
+		puts stdout "Stripe width $stripewidth fits $numvias $bestvia at cut width $bestcutwidth separation $bestcutsep"
+	    } else {
+		puts stdout "Warning: couldn't get cut size and spacing for via $bestvia"
+		lappend viaspaces $bestwidth
+		lappend nvias [expr floor($stripewidth / $bestwidth)]
+		lappend viaoffsets [/ $bestwidth 2]
+	    }
 	}
     }
 
@@ -914,30 +1009,40 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set ry [+ $rowy $ay]
 		    set layer [lindex $layerlist $i]
 		    set via [lindex $basevias $i]
-		    set vh [lindex $viaheights $i]
-		    set vs [lindex $viaspaces $i]
-		    set vo [lindex $viaoffsets $i]
-		    set nv [lindex $nvias $i]
-		    set x1 $slow
+		    set viarule [lindex $baseviarules $i]
+
 		    if $first {
 		        puts -nonewline $fanno "+ ROUTED "
 		        set first false
 		    } else {
 		        puts -nonewline $fanno "  NEW "
 		    }
-		    set ovh [expr int($vh)]
-		    set oshigh [expr int($shigh)]
-		    set ory [expr int($ry)]
-		    set ox1 [expr int($x1)]
 
-		    puts $fanno "$layer $ovh ( $oshigh $ory ) ( $ox1 * )"
-		    set x2 [+ $x1 $vo]
-		    for {set k 0} {$k < $nv} {incr k} {
-		        set ox1 [expr int($x1)]
-		        set ox2 [expr int($x2)]
-		        puts $fanno "  NEW $layer $ovh ( $ox1 $ory ) ( $ox2 * ) $via"
-			set x1 $x2
-			set x2 [+ $x1 $vs]
+		    if {$viarule != ""} {
+                        # Simply put a single VIARULE via
+			puts $fanno "$layer 1 ( $smean $ry ) ( * * ) ${viarule}_post"
+		    } else {
+			# No VIARULE, so drop down a number of vias
+
+			set vh [lindex $viaheights $i]
+			set vs [lindex $viaspaces $i]
+			set vo [lindex $viaoffsets $i]
+			set nv [lindex $nvias $i]
+			set x1 $slow
+			set ovh [expr int($vh)]
+			set oshigh [expr int($shigh)]
+			set ory [expr int($ry)]
+			set ox1 [expr int($x1)]
+
+			puts $fanno "$layer $ovh ( $oshigh $ory ) ( $ox1 * )"
+			set x2 [+ $x1 $vo]
+			for {set k 0} {$k < $nv} {incr k} {
+			    set ox1 [expr int($x1)]
+	    		    set ox2 [expr int($x2)]
+	    		    puts $fanno "  NEW $layer $ovh ( $ox1 $ory ) ( $ox2 * ) $via"
+			    set x1 $x2
+			    set x2 [+ $x1 $vs]
+			}
 		    }
 		}
 		if {$tnum < 3} {
@@ -1005,11 +1110,8 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set ry [+ $rowy $ay]
 		    set layer [lindex $layerlist $i]
 		    set via [lindex $basevias $i]
-		    set vh [lindex $viaheights $i]
-		    set vs [lindex $viaspaces $i]
-		    set vo [lindex $viaoffsets $i]
-		    set nv [lindex $nvias $i]
-		    set x1 $slow
+		    set viarule [lindex $baseviarules $i]
+
 		    if $first {
 		    	puts -nonewline $fanno "+ ROUTED "
 			set first false
@@ -1017,19 +1119,31 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 			puts -nonewline $fanno "  NEW "
 		    }
 
-		    set ovh [expr int($vh)]
-		    set oshigh [expr int($shigh)]
-		    set ory [expr int($ry)]
-		    set ox1 [expr int($x1)]
+		    if {$viarule != ""} {
+                        # Simply put a single VIARULE via
+			puts $fanno "$layer 1 ( $smean $ry ) ( * * ) ${viarule}_post"
+		    } else {
+			# No VIARULE, so drop down a number of vias
 
-		    puts $fanno "$layer $ovh ( $oshigh $ory ) ( $ox1 * )"
-		    set x2 [+ $x1 $vo]
-		    for {set k 0} {$k < $nv} {incr k} {
+			set vh [lindex $viaheights $i]
+			set vs [lindex $viaspaces $i]
+			set vo [lindex $viaoffsets $i]
+			set nv [lindex $nvias $i]
+			set x1 $slow
+			set ovh [expr int($vh)]
+			set oshigh [expr int($shigh)]
+			set ory [expr int($ry)]
 			set ox1 [expr int($x1)]
-			set ox2 [expr int($x2)]
-			puts $fanno "  NEW $layer $ovh ( $ox1 $ory ) ( $ox2 * ) $via"
-			set x1 $x2
-			set x2 [+ $x1 $vs]
+
+			puts $fanno "$layer $ovh ( $oshigh $ory ) ( $ox1 * )"
+			set x2 [+ $x1 $vo]
+			for {set k 0} {$k < $nv} {incr k} {
+			    set ox1 [expr int($x1)]
+			    set ox2 [expr int($x2)]
+			    puts $fanno "  NEW $layer $ovh ( $ox1 $ory ) ( $ox2 * ) $via"
+			    set x1 $x2
+			    set x2 [+ $x1 $vs]
+			}
 		    }
 		}
 		if {$tnum < 3} {
@@ -1052,6 +1166,104 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 	incr j
     }
     puts $fanno " ;"
+}
+
+#-----------------------------------------------------------------
+# Write the VIA sections for the power bus posts.
+#-----------------------------------------------------------------
+
+proc write_viarules {fanno stripewidth} {
+    global viarules
+
+    # First pass over rules:  count valid rules
+    set numvias 0
+    foreach viarule $viarules {
+        set llx 0
+        set lly 0
+        set urx 0
+        set ury 0
+
+        dict for {layername layerspec} $viarule {
+            if {[llength $layerspec] == 6} {
+		# Cut and spacing rule
+                set llx [lindex $layerspec 0]
+                set lly [lindex $layerspec 1]
+                set urx [lindex $layerspec 2]
+                set ury [lindex $layerspec 3]
+	    }
+        }
+
+	# Check on bad entries
+	if {($llx != $urx) && ($lly != $ury)} {incr numvias}
+    }
+    if {$numvias == 0} {return}
+
+    puts -nonewline $fanno "VIAS $numvias"
+
+    foreach viarule $viarules {
+	set viarulename [dict get $viarule name]
+        # First pass of rule:  Make sure we know the cut size, spacing,
+        # and overhang.
+        set xencl 0
+        set yencl 0
+        set xspace 0
+        set yspace 0
+        set llx 0
+        set lly 0
+        set urx 0
+        set ury 0
+
+        dict for {layername layerspec} $viarule {
+            if {[llength $layerspec] == 2} {
+		# Enclosure rule (use maximum for top and bottom layers)
+		set xencl [expr max([lindex $layerspec 0], $xencl)]
+		set yencl [expr max([lindex $layerspec 1], $yencl)]
+            } elseif {[llength $layerspec] == 6} {
+		# Cut and spacing rule
+                set llx [lindex $layerspec 0]
+                set lly [lindex $layerspec 1]
+                set urx [lindex $layerspec 2]
+                set ury [lindex $layerspec 3]
+                set xspace [lindex $layerspec 4]
+                set yspace [lindex $layerspec 5]
+	    }
+        }
+
+	# Check on bad entries
+	if {($llx == $urx) || ($lly == $ury)} {continue}
+
+        puts -nonewline $fanno " ;\n- ${viarulename}_post"
+
+        # Determine post size, and how many via cuts are going to fit.
+	set posturx [expr int(floor($stripewidth / 2))]
+	set postllx -$posturx
+        set postury [expr int($ury + $yencl)]
+	set postlly [expr int($lly - $yencl)]
+	set lly [expr int($lly)]
+	set ury [expr int($ury)]
+	set numvias [expr int(floor(($stripewidth - (2 * $xencl) + $xspace) / ($urx - $llx + $xspace)))]
+
+        # Second pass of rule:  Write out the via geometry.
+        dict for {layername layerspec} $viarule {
+	    if {$layername == "name"} {continue}
+            if {[llength $layerspec] == 2} {
+		# Enclosure rule, so this is a metal layer.  Write the bounds.
+		puts -nonewline $fanno "\n+ RECT ${layername} ( $postllx $postlly ) ( $posturx $postury )" 
+	    } elseif {[llength $layerspec] == 6} {
+		# Cut and spacing rule, so this is a cut layer.  Write all the cuts
+                # No need to center, just start at left side + X enclosure
+                set xoffset [expr int($postllx + $xencl)]
+		for {set i 0} {$i < $numvias} {incr i} {
+                    set xnext [expr int($xoffset + $urx - $llx)]
+		    puts -nonewline $fanno "\n+ RECT ${layername} ( $xoffset $lly ) ( $xnext $ury )"
+                    set xoffset [expr int($xnext + $xspace)]
+		}
+	    }
+        }
+    }
+
+    puts $fanno " ;\nEND VIAS"
+    puts $fanno ""
 }
 
 #-----------------------------------------------------------------
@@ -1461,6 +1673,13 @@ while {[gets $fdef line] >= 0} {
 	}
 
     } elseif [regexp {[ \t]*COMPONENTS[ \t]+([^ \t]+)[ \t]*;} $line lmatch number] {
+
+        # Prior to writing components, check if there are viarules and write VIA
+        # entries for the power bus post contacts.
+        if {$dostripes && ([llength $viarules] > 0)} {
+	    write_viarules $fanno $stripewidth
+        }
+
 	puts $fanno "COMPONENTS $numcomps ;"
 	set r 0
 	set s 0
