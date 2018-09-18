@@ -853,7 +853,7 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		lappend baseviarules ${viarulename}
 		lappend basevias ""
 		lappend viaoffsets 0
-		lappend viaheights 0
+		lappend viaheights [dict get $viarule height]
 		lappend viaspaces 0
 		lappend nvias 0
 		break
@@ -1010,6 +1010,8 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set layer [lindex $layerlist $i]
 		    set via [lindex $basevias $i]
 		    set viarule [lindex $baseviarules $i]
+		    set vh [lindex $viaheights $i]
+		    set ovh [expr int($vh)]
 
 		    if $first {
 		        puts -nonewline $fanno "+ ROUTED "
@@ -1020,16 +1022,16 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 
 		    if {$viarule != ""} {
                         # Simply put a single VIARULE via
-			puts $fanno "$layer 1 ( $smean $ry ) ( * * ) ${viarule}_post"
+			set ory [expr int($ry)]
+			set osmean [expr int($smean)]
+			puts $fanno "$layer $ovh ( $osmean $ory ) ( * * ) ${viarule}_post"
 		    } else {
 			# No VIARULE, so drop down a number of vias
 
-			set vh [lindex $viaheights $i]
 			set vs [lindex $viaspaces $i]
 			set vo [lindex $viaoffsets $i]
 			set nv [lindex $nvias $i]
 			set x1 $slow
-			set ovh [expr int($vh)]
 			set oshigh [expr int($shigh)]
 			set ory [expr int($ry)]
 			set ox1 [expr int($x1)]
@@ -1111,6 +1113,8 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set layer [lindex $layerlist $i]
 		    set via [lindex $basevias $i]
 		    set viarule [lindex $baseviarules $i]
+		    set vh [lindex $viaheights $i]
+		    set ovh [expr int($vh)]
 
 		    if $first {
 		    	puts -nonewline $fanno "+ ROUTED "
@@ -1121,16 +1125,16 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 
 		    if {$viarule != ""} {
                         # Simply put a single VIARULE via
-			puts $fanno "$layer 1 ( $smean $ry ) ( * * ) ${viarule}_post"
+			set ory [expr int($ry)]
+			set osmean [expr int($smean)]
+			puts $fanno "$layer $ovh ( $osmean $ory ) ( * * ) ${viarule}_post"
 		    } else {
 			# No VIARULE, so drop down a number of vias
 
-			set vh [lindex $viaheights $i]
 			set vs [lindex $viaspaces $i]
 			set vo [lindex $viaoffsets $i]
 			set nv [lindex $nvias $i]
 			set x1 $slow
-			set ovh [expr int($vh)]
 			set oshigh [expr int($shigh)]
 			set ory [expr int($ry)]
 			set ox1 [expr int($x1)]
@@ -1200,6 +1204,7 @@ proc write_viarules {fanno stripewidth} {
 
     puts -nonewline $fanno "VIAS $numvias"
 
+    set newviarules {}
     foreach viarule $viarules {
 	set viarulename [dict get $viarule name]
         # First pass of rule:  Make sure we know the cut size, spacing,
@@ -1239,6 +1244,9 @@ proc write_viarules {fanno stripewidth} {
 	set postllx -$posturx
         set postury [expr int($ury + $yencl)]
 	set postlly [expr int($lly - $yencl)]
+        # Add record for "height" to the viarule
+        dict set viarule height [expr $postury - $postlly]
+	lappend newviarules $viarule
 	set lly [expr int($lly)]
 	set ury [expr int($ury)]
 	set numvias [expr int(floor(($stripewidth - (2 * $xencl) + $xspace) / ($urx - $llx + $xspace)))]
@@ -1266,6 +1274,7 @@ proc write_viarules {fanno stripewidth} {
 
     puts $fanno " ;\nEND VIAS"
     puts $fanno ""
+    set viarules $newviarules
 }
 
 #-----------------------------------------------------------------
