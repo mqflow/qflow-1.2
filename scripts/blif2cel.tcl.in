@@ -1,10 +1,31 @@
 #!TCLSH_PATH
 #
 # Usage:
-#	blif2cel.tcl <blif_filename> <lef_filename> [<cel_filename>]
+#	blif2cel.tcl [options]
 #
-# If cel_filename is not specified, then name will be the root name
-# of the .blif file with the .cel extension.
+# [options] may be:
+#
+#	--cel <cel_filename>
+#		Specify the output file.  Optional.  If left not
+#		specified, then name will be the root name of the
+#		.blif file with the .cel extension.
+#	--blif <blif_filename>
+#		Specify the input BLIF file.  This option is mandatory.
+#	--hard-macro <path_to_hard_macro>
+#		Specify a LEF file for a hard macro.  This is separate
+#		from "--lef" because hard macros are treated differently
+#		in the .cel file.
+#	--lef <lef_filename>
+#		Specify the input LEF file.  If there are multiple
+#		LEF files, then use this option as many times as needed.
+#		If the technology LEF is a separate file, then it must
+#		be given as an option before all other LEF files.  At
+#		least one LEF file is mandatory.
+#	--units <value>
+#		Units are usually pulled from the technology LEF file
+#		MANUFACTURINGGRID.  This option can be used to override
+#		that value.  Optional.
+#
 #
 # NOTE:	Cells must be placed relative to the LEF bounding box during
 #	physical placement!
@@ -20,10 +41,12 @@
 # Modified October 8, 2013 to use blif netlists as input 
 # Modified December 6, 2016 with hard macro extensions
 # courtesy of David Lanzendorfer
+# Modified September 18, 2018 to parse database units from
+# technology LEF file.
 #------------------------------------------------------------
 # LEF dimensions are microns unless otherwise stated.
 
-set units 100
+set units 100		;# default database units are centimicrons
 set pitchx 0		;# value overridden from LEF file
 set pitchy 0		;# value overridden from LEF file
 set trackskip 0		;# reduce number of implicit feedthroughs
@@ -33,6 +56,8 @@ set arglen [llength $argv]
 set index 0
 set args(hard_macros) {}
 set args(lefs) {}
+set units_override false	;# units set from command line if true
+set units_used false		;# units should not be changed after this is true
 
 while {$index < $arglen} {
     set arg [lindex $argv $index]
@@ -56,10 +81,12 @@ while {$index < $arglen} {
 
 	--units {
 	    set units [lindex $argv [incr index]]
+	    set units_override true
 	}
 
 	default  {
-	    set filename [lindex $argv $index]
+	    puts stderr "All arguments must have option switches."
+	    exit
 	}
     }
     incr index
@@ -386,7 +413,7 @@ proc parse_hard_macro {leffile macroname} {
 #----------------------------------------------------------------
 
 proc parse_macro {leffile macroname} {
-    global $macroname units
+    global $macroname units units_used
 
     # puts stderr "Parsing macro $macroname:  Ports are:"
     puts stderr "Parsing macro $macroname"
@@ -448,6 +475,7 @@ foreach flef $flefs {
 	} elseif [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
 	    if {[lsearch $macrolist $macroname] >= 0} {
 		# Parse the "macro" statement 
+		set units_used true
 		parse_macro $flef $macroname
 	    } else {
 		# This macro is not used. . . skip to end of macro
@@ -457,6 +485,24 @@ foreach flef $flefs {
 			    break
 			}
 		    }
+		}
+	    }
+	} elseif [regexp {[ \t]*MANUFACTURINGGRID[ \t]+([^ \t\n\r]+)} $line lmatch locunits] {
+	    # Set the default units to use from the manufacturing grid, unless it
+	    # is less than 100 (this arbitrary rule enforced in qrouter's .info
+	    # output).
+	    set mscale [expr int(0.5 + 1.0 / $locunits)]
+	    if {$mscale > $units} {
+		if {$units_used == true} {
+		   puts stdout "WARNING:  Scale units read from tech file after reading"
+		   puts stdout "macros.  Either reorder the input files or force the"
+		   puts stdout "scale factor from the command line."
+		} elseif {$units_override == false} {
+		   set units $mscale
+		} elseif {$mscale > $units} {
+		   puts stdout "WARNING:  Units forced to ${units} by command-line option,"
+		   puts stdout "but technology LEF wants to set units to ${mscale}."
+		   puts stdout "This may result in round-off errors in the layout."
 		}
 	    }
 	} elseif [regexp {[ \t]*VIA[ \t]+([^ \t]+)} $line lmatch vianame] {
@@ -490,8 +536,6 @@ foreach flef $flefs {
 		incr matches
 	    } elseif [regexp {[ \t]*CLEARANCEMEASURE} $line lmatch] {
 		incr matches
-	    } elseif [regexp {[ \t]*MANUFACTURINGGRID} $line lmatch] {
-		incr matches
 	    } elseif [regexp {[ \t]*MAXVIASTACK} $line lmatch] {
 		# We *should* care about this one;  need to pass it on to the router
 		incr matches
@@ -515,6 +559,7 @@ foreach fhardmacro $fhardmacros {
 	} elseif [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
 	    if {[lsearch $macrolist $macroname] >= 0} {
 		# Parse the "macro" statement 
+		set units_used true
 		parse_hard_macro $fhardmacro $macroname
 	    } else {
 		# This macro is not used. . . skip to end of macro
