@@ -2403,7 +2403,7 @@ class QflowManager(ttk.Frame):
 
         self.qflowproc = subprocess.Popen(['qflow', self.project, 'migrate'],
 		stdout = subprocess.PIPE, stderr=subprocess.PIPE, bufsize = 0, cwd = self.rootpath)
-        filename = self.logdir + '/migrate.log'
+        filename = self.layoutdir + '/' + self.project + '.spice'
         try:
             statbuf = os.stat(filename)
         except:
