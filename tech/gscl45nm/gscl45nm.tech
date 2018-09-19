@@ -394,6 +394,7 @@ drc
  style drc variants (fast),(full),(routing)
 
  scalefactor 5 2
+ option wide-width-noninclusive
 
  variants (fast),(full)
 #-----------------------------
@@ -470,16 +471,16 @@ drc
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm1 90 allm1 90 touching_ok \
- "Metal1 > 90nm spacing to unrelated m1 < 90nm (METAL1.5)"
- widespacing allm1 270 allm1 270 touching_ok \
- "Metal1 > 270nm spacing to unrelated m1 < 270nm (METAL1.6)"
- widespacing allm1 500 allm1 500 touching_ok \
- "Metal1 > 500nm spacing to unrelated m1 < 500nm (METAL1.7)"
- widespacing allm1 900 allm1 900 touching_ok \
- "Metal1 > 900nm spacing to unrelated m1 < 900nm (METAL1.8)"
- widespacing allm1 1500 allm1 1500 touching_ok \
- "Metal1 > 1500nm spacing to unrelated m1 < 1500nm (METAL1.9)"
+ widespacing allm1 90 900 allm1 90 touching_ok \
+ "Metal1 > 90nm and runlength > 900nm spacing to unrelated m1 < 90nm (METAL1.5)"
+ widespacing allm1 270 300 allm1 270 touching_ok \
+ "Metal1 > 270nm and runlength > 300nm spacing to unrelated m1 < 270nm (METAL1.6)"
+ widespacing allm1 500 1800 allm1 500 touching_ok \
+ "Metal1 > 500nm and runlength > 1.8um spacing to unrelated m1 < 500nm (METAL1.7)"
+ widespacing allm1 900 2700 allm1 900 touching_ok \
+ "Metal1 > 900nm and runlength > 2.7um spacing to unrelated m1 < 900nm (METAL1.8)"
+ widespacing allm1 1500 4000 allm1 1500 touching_ok \
+ "Metal1 > 1500nm and runlength > 4.0um spacing to unrelated m1 < 1500nm (METAL1.9)"
 variants *
 
 #--------------------------------------------------
@@ -506,16 +507,16 @@ variants *
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm2 90 allm2 90 touching_ok \
- "Metal2 > 90nm spacing to unrelated m2 < 90nm (METALINT.5)"
- widespacing allm2 270 allm2 270 touching_ok \
- "Metal2 > 270nm spacing to unrelated m2 < 270nm (METALINT.6)"
- widespacing allm2 500 allm2 500 touching_ok \
- "Metal2 > 500nm spacing to unrelated m2 < 500nm (METALINT.7)"
- widespacing allm2 900 allm2 900 touching_ok \
- "Metal2 > 900nm spacing to unrelated m2 < 900nm (METALINT.8)"
- widespacing allm2 1500 allm2 1500 touching_ok \
- "Metal2 > 1500nm spacing to unrelated m2 < 1500nm (METALINT.9)"
+ widespacing allm2 90 900 allm2 90 touching_ok \
+ "Metal2 > 90nm and runlength > 900nm spacing to unrelated m2 < 90nm (METALINT.5)"
+ widespacing allm2 270 300 allm2 270 touching_ok \
+ "Metal2 > 270nm and runlength > 300nm spacing to unrelated m2 < 270nm (METALINT.6)"
+ widespacing allm2 500 1800 allm2 500 touching_ok \
+ "Metal2 > 500nm and runlength > 1.8um spacing to unrelated m2 < 500nm (METALINT.7)"
+ widespacing allm2 900 2700 allm2 900 touching_ok \
+ "Metal2 > 900nm and runlength > 2.7um spacing to unrelated m2 < 900nm (METALINT.8)"
+ widespacing allm2 1500 4000 allm2 1500 touching_ok \
+ "Metal2 > 1500nm and runlength > 4.0um spacing to unrelated m2 < 1500nm (METALINT.9)"
 variants *
 
 #--------------------------------------------------
@@ -542,16 +543,16 @@ variants *
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm3 90 allm3 90 touching_ok \
- "Metal3 > 90nm spacing to unrelated m3 < 90nm (METALINT.5)"
- widespacing allm3 270 allm3 270 touching_ok \
- "Metal3 > 270nm spacing to unrelated m3 < 270nm (METALINT.6)"
- widespacing allm3 500 allm3 500 touching_ok \
- "Metal3 > 500nm spacing to unrelated m3 < 500nm (METALINT.7)"
- widespacing allm3 900 allm3 900 touching_ok \
- "Metal3 > 900nm spacing to unrelated m3 < 900nm (METALINT.8)"
- widespacing allm3 1500 allm3 1500 touching_ok \
- "Metal3 > 1500nm spacing to unrelated m3 < 1500nm (METALINT.9)"
+ widespacing allm3 90 900 allm3 90 touching_ok \
+ "Metal3 > 90nm and runlength > 900nm spacing to unrelated m3 < 90nm (METALINT.5)"
+ widespacing allm3 270 300 allm3 270 touching_ok \
+ "Metal3 > 270nm and runlength > 300nm spacing to unrelated m3 < 270nm (METALINT.6)"
+ widespacing allm3 500 1800 allm3 500 touching_ok \
+ "Metal3 > 500nm and runlength > 1.8um spacing to unrelated m3 < 500nm (METALINT.7)"
+ widespacing allm3 900 2700 allm3 900 touching_ok \
+ "Metal3 > 900nm and runlength > 2.7um spacing to unrelated m3 < 900nm (METALINT.8)"
+ widespacing allm3 1500 4000 allm3 1500 touching_ok \
+ "Metal3 > 1500nm and runlength > 4.0um spacing to unrelated m3 < 1500nm (METALINT.9)"
 variants *
 
 #--------------------------------------------------
@@ -576,14 +577,14 @@ variants *
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm4 270 allm4 270 touching_ok \
- "Metal4 > 270nm spacing to unrelated m4 < 270nm (METALSMG.6)"
- widespacing allm4 500 allm4 500 touching_ok \
- "Metal4 > 500nm spacing to unrelated m4 < 500nm (METALSMG.7)"
- widespacing allm4 900 allm4 900 touching_ok \
- "Metal4 > 900nm spacing to unrelated m4 < 900nm (METALSMG.8)"
- widespacing allm4 1500 allm4 1500 touching_ok \
- "Metal4 > 1500nm spacing to unrelated m4 < 1500nm (METALSMG.9)"
+ widespacing allm4 270 300 allm4 270 touching_ok \
+ "Metal4 > 270nm and runlength > 300nm spacing to unrelated m4 < 270nm (METALSMG.6)"
+ widespacing allm4 500 1800 allm4 500 touching_ok \
+ "Metal4 > 500nm and runlength > 1.8um spacing to unrelated m4 < 500nm (METALSMG.7)"
+ widespacing allm4 900 2700 allm4 900 touching_ok \
+ "Metal4 > 900nm and runlength > 2.7um spacing to unrelated m4 < 900nm (METALSMG.8)"
+ widespacing allm4 1500 4000 allm4 1500 touching_ok \
+ "Metal4 > 1500nm and runlength > 4.0um spacing to unrelated m4 < 1500nm (METALSMG.9)"
 variants *
 
 #--------------------------------------------------
@@ -606,14 +607,14 @@ variants *
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm5 270 allm5 270 touching_ok \
- "Metal5 > 270nm spacing to unrelated m5 < 270nm (METALSMG.6)"
- widespacing allm5 500 allm5 500 touching_ok \
- "Metal5 > 500nm spacing to unrelated m5 < 500nm (METALSMG.7)"
- widespacing allm5 900 allm5 900 touching_ok \
- "Metal5 > 900nm spacing to unrelated m5 < 900nm (METALSMG.8)"
- widespacing allm5 1500 allm5 1500 touching_ok \
- "Metal5 > 1500nm spacing to unrelated m5 < 1500nm (METALSMG.9)"
+ widespacing allm5 270 300 allm5 270 touching_ok \
+ "Metal5 > 270nm and runlength > 300nm spacing to unrelated m5 < 270nm (METALSMG.6)"
+ widespacing allm5 500 1800 allm5 500 touching_ok \
+ "Metal5 > 500nm and runlength > 1.8um spacing to unrelated m5 < 500nm (METALSMG.7)"
+ widespacing allm5 900 2700 allm5 900 touching_ok \
+ "Metal5 > 900nm and runlength > 2.7um spacing to unrelated m5 < 900nm (METALSMG.8)"
+ widespacing allm5 1500 4000 allm5 1500 touching_ok \
+ "Metal5 > 1500nm and runlength > 4.0um spacing to unrelated m5 < 1500nm (METALSMG.9)"
 variants *
 
 #--------------------------------------------------
@@ -636,14 +637,14 @@ variants *
 # Needed:  Run-length rules
 
 variants (fast),(full)
- widespacing allm6 270 allm6 270 touching_ok \
- "Metal6 > 270nm spacing to unrelated m6 < 270nm (METALSMG.6)"
- widespacing allm6 500 allm6 500 touching_ok \
- "Metal6 > 500nm spacing to unrelated m6 < 500nm (METALSMG.7)"
- widespacing allm6 900 allm6 900 touching_ok \
- "Metal6 > 900nm spacing to unrelated m6 < 900nm (METALSMG.8)"
- widespacing allm6 1500 allm6 1500 touching_ok \
- "Metal6 > 1500nm spacing to unrelated m6 < 1500nm (METALSMG.9)"
+ widespacing allm6 270 300 allm6 270 touching_ok \
+ "Metal6 > 270nm and runlength > 300nm spacing to unrelated m6 < 270nm (METALSMG.6)"
+ widespacing allm6 500 1800 allm6 500 touching_ok \
+ "Metal6 > 500nm and runlength > 1.8um spacing to unrelated m6 < 500nm (METALSMG.7)"
+ widespacing allm6 900 2700 allm6 900 touching_ok \
+ "Metal6 > 900nm and runlength > 2.7um spacing to unrelated m6 < 900nm (METALSMG.8)"
+ widespacing allm6 1500 4000 allm6 1500 touching_ok \
+ "Metal6 > 1500nm and runlength > 4.0um spacing to unrelated m6 < 1500nm (METALSMG.9)"
 variants *
 
 #--------------------------------------------------
@@ -668,12 +669,10 @@ variants *
 # and have been corrected here.
 
 variants (fast),(full)
- widespacing allm7 500 allm7 500 touching_ok \
- "Metal7 > 500nm spacing to unrelated m7 < 500nm (METALSMG.7)"
- widespacing allm7 900 allm7 900 touching_ok \
- "Metal7 > 900nm spacing to unrelated m7 < 900nm (METALSMG.8)"
- widespacing allm7 1500 allm7 1500 touching_ok \
- "Metal7 > 1500nm spacing to unrelated m7 < 1500nm (METALSMG.9)"
+ widespacing allm7 270 300 allm7 270 touching_ok \
+ "Metal7 > 900nm and runlength > 2.7um spacing to unrelated m7 < 900nm (METALTNG.8)"
+ widespacing allm7 1500 4000 allm7 1500 touching_ok \
+ "Metal7 > 1500nm and runlength > 4.0um spacing to unrelated m7 < 1500nm (METALTNG.9)"
 variants *
 
 #--------------------------------------------------
@@ -698,10 +697,10 @@ variants *
 # and have been corrected here.
  
 variants (fast),(full)
- widespacing allm8 900 allm8 900 touching_ok \
- "Metal8 > 900nm spacing to unrelated m8 < 900nm (METALSMG.8)"
- widespacing allm8 1500 allm8 1500 touching_ok \
- "Metal8 > 1500nm spacing to unrelated m8 < 1500nm (METALSMG.9)"
+ widespacing allm8 900 2700 allm8 900 touching_ok \
+ "Metal8 > 900nm and runlength > 2.7um spacing to unrelated m8 < 900nm (METALTNG.8)"
+ widespacing allm8 1500 4000 allm8 1500 touching_ok \
+ "Metal8 > 1500nm and runlength > 4.0um spacing to unrelated m8 < 1500nm (METALTNG.9)"
 variants *
 
 #--------------------------------------------------
@@ -722,10 +721,10 @@ variants *
  spacing allm9 allm9 800 touching_ok "Metal9 spacing < 800nm (METALG.2)"
 
 variants (fast),(full)
- widespacing allm9 900 allm9 900 touching_ok \
- "Metal9 > 900nm spacing to unrelated m9 < 900nm (METALG.8)"
- widespacing allm9 1500 allm9 1500 touching_ok \
- "Metal9 > 1500nm spacing to unrelated m9 < 900nm (METALG.9)"
+ widespacing allm9 900 2700 allm9 900 touching_ok \
+ "Metal9 > 900nm and runlength > 2.7um spacing to unrelated m9 < 900nm (METALG.8)"
+ widespacing allm9 1500 4000 allm9 1500 touching_ok \
+ "Metal9 > 1500nm and runlength > 4.0um spacing to unrelated m9 < 1500nm (METALG.9)"
 variants *
 
 #--------------------------------------------------
@@ -746,10 +745,10 @@ variants *
  spacing allm10 allm10 800 touching_ok "Metal10 spacing < 800nm (METALG.2)"
 
 variants (fast),(full)
- widespacing allm10 900 allm10 900 touching_ok \
- "Metal10 > 900nm spacing to unrelated m10 < 900nm (METALG.8)"
- widespacing allm10 1500 allm10 1500 touching_ok \
- "Metal10 > 1500nm spacing to unrelated m10 < 900nm (METALG.9)"
+ widespacing allm10 900 2700 allm10 900 touching_ok \
+ "Metal10 > 900nm and runlength > 2.7um spacing to unrelated m10 < 900nm (METALG.8)"
+ widespacing allm10 1500 4000 allm10 1500 touching_ok \
+ "Metal10 > 1500nm and runlength > 4.0um spacing to unrelated m10 < 1500nm (METALG.9)"
 variants *
 
 #----------------------------
