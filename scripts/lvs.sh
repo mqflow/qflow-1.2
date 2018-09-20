@@ -97,6 +97,16 @@ if ( ! ( -f ${layoutdir}/${rootname}.spice  || ( -f ${layoutdir}/${rootname}.spi
     exit 1
 endif
 
+# If the layout (.mag) file is more recent than the netlist (.spice) file, then
+# the layout needs to be re-extracted.
+
+if ( -M ${layoutdir}/${rootname}.spice < -M ${layoutdir}/${rootname}.mag ) then
+    echo "Layout post-dates extracted netlist;  re-extraction required." \
+	|& tee -a ${synthlog}
+    # Re-extract the netlist.
+    source ${scriptdir}/migrate.sh -x ${projectpath} ${sourcename}
+endif
+
 # Check for technology setup script
 
 set setup_script=${techdir}/${techname}_setup.tcl

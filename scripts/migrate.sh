@@ -11,8 +11,7 @@ if ($#argv < 2) then
 endif
 
 # Split out options from the main arguments
-set argline=(`getopt "" $argv[1-]`)
-
+set argline=(`getopt "x" $argv[1-]`)
 set options=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $1}'`
 set cmdargs=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $2}'`
 set argc=`echo $cmdargs | wc -w`
@@ -25,9 +24,22 @@ else
    echo   where
    echo       <project_path> is the name of the project directory containing
    echo                 a file called qflow_vars.sh.
-   echo       <source_name> is the root name of the verilog file
+   echo       <source_name> is the root name of the verilog file, and
+   echo       [options] are:
+   echo                 -x      extract only (use existing layout)
+   echo
    exit 1
 endif
+
+set useexisting=0
+
+foreach option (${options})
+   switch (${option})
+      case -x:
+	 set useexisting=1
+	 breaksw
+   endsw
+end
 
 set projectpath=$argv1
 set sourcename=$argv2
@@ -50,7 +62,7 @@ if (-f project_vars.sh) then
 endif
 
 if (! ${?migrate_options} ) then
-   set migrate_options = ${options}
+   set migrate_options = ""
 endif
 
 if (!($?logdir)) then
@@ -58,14 +70,22 @@ if (!($?logdir)) then
 endif
 mkdir -p ${logdir}
 set lastlog=${logdir}/post_sta.log
-set synthlog=${logdir}/migrate.log
-rm -f ${synthlog} >& /dev/null
-rm -f ${logdir}/drc.log >& /dev/null
-rm -f ${logdir}/lvs.log >& /dev/null
+if ( ${useexisting} == 1 ) then
+   set synthlog=${logdir}/lvs.log
+else
+   set synthlog=${logdir}/migrate.log
+   rm -f ${logdir}/drc.log >& /dev/null
+   rm -f ${logdir}/lvs.log >& /dev/null
+endif
 rm -f ${logdir}/gdsii.log >& /dev/null
+rm -f ${synthlog} >& /dev/null
 touch ${synthlog}
 set date=`date`
-echo "Qflow migration logfile created on $date" > ${synthlog}
+if ( ${useexisting} == 1 ) then
+   echo "Qflow LVS logfile appended with re-extraction on $date" > ${synthlog}
+else
+   echo "Qflow migration logfile created on $date" > ${synthlog}
+endif
 
 # Check if last line of post_sta log file says "error condition"
 # Not necessary to run post_sta, so check route logfile if post_sta does not exist.
@@ -164,7 +184,12 @@ endif
 # they are rotated outward from the cell, since DEF files don't indicate
 # label geometry.
 
-cat >> ${migratefile} << EOF
+if ( ${useexisting} == 1 ) then
+   cat >> ${migratefile} << EOF
+load ${rootname}
+EOF
+else
+   cat >> ${migratefile} << EOF
 def read ${rootname}
 load ${rootname}
 select top cell
@@ -191,6 +216,10 @@ box grow w 100
 select area labels
 setlabel just e
 writeall force ${rootname}
+EOF
+endif
+
+cat >> ${migratefile} << EOF
 lef write ${rootname}
 expand
 extract all
@@ -218,13 +247,15 @@ ${bindir}/magic -dnull -noconsole ${migrate_options} ${migratefile} |& tee -a ${
 # Spot check:  Did the script generate .mag, .lef, and .spice files?
 #---------------------------------------------------------------------
 
-if ( !( -f ${rootname}.mag || ( -f ${rootname}.mag && \
-	-M ${rootname}.mag < -M ${rootname}.def ))) then
-   echo "Migration failure:  No .mag layout file generated." \
-	|& tee -a ${synthlog}
-   echo "Premature exit." |& tee -a ${synthlog}
-   echo "Synthesis flow stopped due to error condition." >> ${synthlog}
-   exit 1
+if ( ${useexisting} == 0 ) then
+   if ( !( -f ${rootname}.mag || ( -f ${rootname}.mag && \
+		-M ${rootname}.mag < -M ${rootname}.def ))) then
+      echo "Migration failure:  No .mag layout file generated." \
+		|& tee -a ${synthlog}
+      echo "Premature exit." |& tee -a ${synthlog}
+      echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+      exit 1
+   endif
 endif
 
 if ( !( -f ${rootname}.lef || ( -f ${rootname}.lef && \
@@ -253,6 +284,10 @@ rm -f ${layoutdir}/*.ext
 #------------------------------------------------------------
 
 set endtime = `date`
-echo "Migration script ended on $endtime" >> $synthlog
+if ( ${useexisting} == 1 ) then
+   echo "Re-extraction script ended on $endtime" >> $synthlog
+else
+   echo "Migration script ended on $endtime" >> $synthlog
+endif
 
 exit 0

@@ -164,7 +164,6 @@ class QflowManager(ttk.Frame):
         self.layoutdir = None
         self.logdir = None
         self.pdkdir = None
-        self.netlistdir = None
 
         self.magicgtype = None
         self.magicversion = None
@@ -1286,7 +1285,6 @@ class QflowManager(ttk.Frame):
         sdir = self.rootpath + '/synthesis'
         ldir = self.rootpath + '/layout'
         logdir = self.rootpath + '/log'
-        netlistdir = self.rootpath + '/netlist'
         if not self.pdkdir:
             tdir = self.rootpath + '/tech'
         else:
@@ -1327,8 +1325,6 @@ class QflowManager(ttk.Frame):
                             ldir = value
                         elif key == 'logdir':
                             logdir = value
-                        elif key == 'netlistdir':
-                            netlistdir = value
                         elif key == 'techname':
                             pdkname = value
         
@@ -1337,7 +1333,6 @@ class QflowManager(ttk.Frame):
         self.layoutdir = ldir
         self.logdir = logdir
         self.pdkdir = tdir
-        self.netlistdir = netlistdir
         result = self.set_pdk(self.pdkdir, pdkname)
 
         if not result:
@@ -2041,8 +2036,6 @@ class QflowManager(ttk.Frame):
                 os.makedirs(self.synthdir)
             if not os.path.exists(self.layoutdir):
                 os.makedirs(self.layoutdir)
-            if not os.path.exists(self.netlistdir):
-                os.makedirs(self.netlistdir)
             # Make sure qflow/log exists (qflow should create it, but just a failsafe)
             if not os.path.exists(self.logdir):
                 os.makedirs(self.logdir)
@@ -2691,7 +2684,6 @@ class QflowManager(ttk.Frame):
         srcdir = self.sourcedir
         sdir = self.synthdir
         ldir = self.layoutdir
-        ndir = self.netlistdir
         logdir = self.logdir
 
         # Remove files in qflow
@@ -2741,9 +2733,6 @@ class QflowManager(ttk.Frame):
             rfiles.append(ldir + '/comp.json')
             rfiles.append(ldir + '/qflow.magicrc')
             rfiles.append(ldir + '/' + self.project + '_unroute.def')
-            rfiles.append(ndir + '/func/' + self.project + '.spi')
-            rfiles.append(ndir + '/layout/' + self.project + '.spi')
-            rfiles.append(ndir + '/schem/' + self.project + '.spi')
             rfiles.append(logdir + '/drc.log')
             rfiles.append(logdir + '/lvs.log')
             rfiles.append(logdir + '/gdsii.log')
