@@ -124,7 +124,7 @@ close $fant	;# Done with antenna input file
 #-----------------------------------------------------------------
 
 if [catch {open $vlogname r} fvlog] {
-   puts stderr "Error: can't open file $defname for input"
+   puts stderr "Error: can't open file $vlogname for input"
    return
 }
 
