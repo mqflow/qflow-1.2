@@ -276,8 +276,9 @@ if ($status == 1) then
    exit 1
 endif
 
-set nvsrc = `ls ${sourcedir}/*.v | grep -v match | wc -l`
-set nsvsrc = `ls ${sourcedir}/*.sv | wc -l`
+# Use find, not ls, to avoid error output when no match is found.
+set nvsrc = `find ${sourcedir} -name \*.v -print | grep -v match | wc -l`
+set nsvsrc = `find ${sourcedir} -name \*.sv -print | wc -l`
 
 # Verilog file root name is the same as the module name, at least until
 # discovered otherwise.  If the module name is not given on the command
