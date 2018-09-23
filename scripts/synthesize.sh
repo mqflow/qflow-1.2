@@ -150,111 +150,74 @@ set usescript = `echo ${yosys_options} | grep -- -s | wc -l`
 # Only generate yosys script if none is specified in the yosys options
 if ( ${usescript} == 0 ) then
 
-#---------------------------------------------------------------------
-# Determine hierarchy by running yosys with a simple script to check
-# hierarchy.  Add files until yosys no longer reports an error.
-# Any error not related to a missing source file causes the script
-# to rerun yosys and dump error information into the log file, and
-# exit.
-#---------------------------------------------------------------------
-
 cd ${sourcedir}
 
-set uniquedeplist = ""
-set yerrcnt = 2
+# Check for filelists variable overriding the default.  If it is set,
+# use the value as the filename to get all the verilog source files
+# used by the module.  If not, check for a file ${modulename}.fl and
+# if it exists, use it (this is the default).  If not, then do an
+# automatic search for files containing modules.
 
-while ($yerrcnt > 1)
-
-# Note:  While the use of read_liberty to allow structural verilog only
-# works in yosys 0.3.1 and newer, the following line works for the
-# purpose of querying the hierarchy in all versions.
-
-set svopt = ""
-if ($sourcename == "") then
-   set vext = "v"
-
-   if ( !( -f ${modulename}.${vext} )) then
-      set vext = "sv"
-      set svopt = "-sv"
-      if ( !( -f ${modulename}.${vext} )) then
-         echo "Error:  Verilog source file ${modulename}.v (or .sv) cannot be found!" \
-		|& tee -a ${synthlog}
-      else
-         set sourcename = ${modulename}.${vext}
-      endif
-   else
-      set sourcename = ${modulename}.${vext}
+if ( ! ($?source_file_list) ) then
+   # Check for ${modulename}.fl
+   if ( -f ${modulename}.fl ) then
+      set source_file_list = ${modulename}.fl
    endif
-else
-   if ( !( -f ${sourcename} )) then
-      echo "Error:  Verilog source file ${sourcename} cannot be found!" \
-		|& tee -a ${synthlog}
-   else
-      set vext = ${sourcename:e}
-      if ( ${vext} == "sv" ) then
+endif
+
+if ( $?source_file_list ) then
+
+   # Use file list
+
+   set uniquedeplist = ""
+   if ( $?is_system_verilog ) then
+      if ( "$is_system_verilog" == "1" ) then
 	 set svopt = "-sv"
+      else
+	 set svopt = ""
       endif
+   else
+      set svopt = ""
    endif
-endif
 
-if (${sourcename} == "") then
-   echo "Synthesis flow stopped due to error condition." >> ${synthlog}
-   exit 1
-endif
-
-cat > ${modulename}.ys << EOF
+   cat > ${modulename}.ys << EOF
 # Synthesis script for yosys created by qflow
 read_liberty -lib -ignore_miss_dir -setattr blackbox ${libertypath}
 EOF
 
-# Add all entries in variable "hard_macros".  "hard_macros" should be a
-# list of directories found in ${sourcedir}, each directory the module
-# name of a single module.  The directory contains several files for
-# each hard macro, including .lib, .lef, .spc, .v, and possibly others.
-
-if ( ${?hard_macros} ) then
-    foreach macro_path ( $hard_macros )
-        foreach file ( `ls ${sourcedir}/${macro_path}` )
+   if ( ${?hard_macros} ) then
+      foreach macro_path ( $hard_macros )
+         foreach file ( `ls ${sourcedir}/${macro_path}` )
 	    if ( ${file:e} == "lib" ) then
 		cat >> ${modulename}.ys << EOF
 read_liberty -lib -ignore_miss_dir -setattr blackbox ${sourcedir}/${macro_path}/${file}
 EOF
 		break
 	    endif
-	end
-    end
-endif
+	 end
+      end
+   endif
 
-cat >> ${modulename}.ys << EOF
-read_verilog ${svopt} ${sourcename}
-EOF
+   set lines=`cat $source_file_list`
+   set i=1
+   while ( $i <= $#lines )
+      echo "read_verilog ${svopt} $lines[$i]" >> ${modulename}.ys
+      echo "Adding $lines[$i]"
+      set uniquedeplist = "$uniquedeplist $lines[$i]"
+      @ i = $i + 1
+   end
 
-foreach subname ( $uniquedeplist )
-    if ( !( -f ${subname}.${vext} )) then
-	echo "Error:  Verilog source file ${subname}.${vext} cannot be found!" \
-			|& tee -a ${synthlog}
-    endif
-    echo "read_verilog ${svopt} ${subname}.${vext}" >> ${modulename}.ys
-end
-
-cat >> ${modulename}.ys << EOF
+   cat >> ${modulename}.ys << EOF
 # Hierarchy check
 hierarchy -check
 EOF
 
-# Note:  Remove backslashes and brackets to avoid problems with tcsh
-set yerrors = `eval ${bindir}/yosys -s ${modulename}.ys |& sed -e "/\\/s#\\#/#g" \
+   # Note:  Remove backslashes and brackets to avoid problems with tcsh
+   set yerrors = `eval ${bindir}/yosys -s ${modulename}.ys |& sed -e "/\\/s#\\#/#g" \
 		-e "/\[/s/\[//g" -e "/\]/s/\]//g" | grep ERROR`
-set yerrcnt = `echo $yerrors | wc -c`
+   set yerrcnt = `echo $yerrors | wc -c`
 
-if ($yerrcnt > 1) then
-   set yvalid = `echo $yerrors | grep "referenced in module" | wc -c`
-   # Check error message specific to a missing source file.
-   set ymissing = `echo $yerrors | grep "is not part of" | wc -c`
-   if (($ymissing > 1) && ($yvalid > 1)) then
-      set newdep = `echo $yerrors | cut -d " " -f 3 | cut -c3- | cut -d "'" -f 1`
-      set uniquedeplist = "${uniquedeplist} ${newdep}"
-   else
+   if ($yerrcnt > 1) then
       ${bindir}/yosys -s ${modulename}.ys >& ${synthlog}
       echo "Errors detected in verilog source, need to be corrected." \
 		|& tee -a ${synthlog}
@@ -262,10 +225,154 @@ if ($yerrcnt > 1) then
       echo "Synthesis flow stopped due to error condition." >> ${synthlog}
       exit 1
    endif
-endif
+else
 
-# end while ($yerrcnt > 1)
-end
+   #---------------------------------------------------------------------
+   # Determine hierarchy by running yosys with a simple script to check
+   # hierarchy.  Add files until yosys no longer reports an error.
+   # Any error not related to a missing source file causes the script
+   # to rerun yosys and dump error information into the log file, and
+   # exit.
+   #---------------------------------------------------------------------
+
+   set uniquedeplist = ""
+   set yerrcnt = 2
+
+   while ($yerrcnt > 1)
+
+   # Use is_system_verilog to declare that files with ".v" extension
+   # are system verilog or system verilog compatible.
+
+   if ( $?is_system_verilog ) then
+      if ( "$is_system_verilog" == "1" ) then
+         set svopt = "-sv"
+      else
+         set svopt = ""
+      endif
+   else
+      set svopt = ""
+   endif
+ 
+   # Note:  While the use of read_liberty to allow structural verilog only
+   # works in yosys 0.3.1 and newer, the following line works for the
+   # purpose of querying the hierarchy in all versions.
+
+   if ($sourcename == "") then
+      set vext = "v"
+
+      if ( !( -f ${modulename}.${vext} )) then
+         set vext = "sv"
+         set svopt = "-sv"
+         if ( !( -f ${modulename}.${vext} )) then
+            echo "Error:  Verilog source file ${modulename}.v (or .sv) cannot be found!" \
+		|& tee -a ${synthlog}
+            set svopt = ""
+         else
+            set sourcename = ${modulename}.${vext}
+         endif
+      else
+         set sourcename = ${modulename}.${vext}
+      endif
+   else
+      if ( !( -f ${sourcename} )) then
+         echo "Error:  Verilog source file ${sourcename} cannot be found!" \
+		|& tee -a ${synthlog}
+      else
+         set vext = ${sourcename:e}
+         if ( ${vext} == "sv" ) then
+	    set svopt = "-sv"
+         endif
+      endif
+   endif
+
+   if (${sourcename} == "") then
+      echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+      exit 1
+   endif
+
+   cat > ${modulename}.ys << EOF
+# Synthesis script for yosys created by qflow
+read_liberty -lib -ignore_miss_dir -setattr blackbox ${libertypath}
+EOF
+
+   # Add all entries in variable "hard_macros".  "hard_macros" should be a
+   # list of directories found in ${sourcedir}, each directory the module
+   # name of a single module.  The directory contains several files for
+   # each hard macro, including .lib, .lef, .spc, .v, and possibly others.
+
+   if ( ${?hard_macros} ) then
+       foreach macro_path ( $hard_macros )
+           foreach file ( `ls ${sourcedir}/${macro_path}` )
+	       if ( ${file:e} == "lib" ) then
+		   cat >> ${modulename}.ys << EOF
+read_liberty -lib -ignore_miss_dir -setattr blackbox ${sourcedir}/${macro_path}/${file}
+EOF
+		   break
+	       endif
+	   end
+       end
+   endif
+
+   cat >> ${modulename}.ys << EOF
+read_verilog ${svopt} ${sourcename}
+EOF
+
+   if ( ! ( $?vext ) ) then
+      if ( "$svopt" == "" ) then
+	 set vext = "v"
+      else
+	 set vext = "sv"
+      endif
+   endif
+
+   foreach subname ( $uniquedeplist )
+       if ( ${subname:e} == "" ) then
+           if ( !( -f ${subname}.${vext} )) then
+	       echo "Error:  Verilog source file ${subname}.${vext} cannot be found!" \
+			|& tee -a ${synthlog}
+	   endif
+           echo "read_verilog ${svopt} ${subname}.${vext}" >> ${modulename}.ys
+       else
+           if ( !( -f ${subname} )) then
+	       echo "Error:  Verilog source file ${subname} cannot be found!" \
+			|& tee -a ${synthlog}
+	   endif
+           echo "read_verilog ${svopt} ${subname}" >> ${modulename}.ys
+       endif
+   end
+
+   cat >> ${modulename}.ys << EOF
+# Hierarchy check
+hierarchy -check
+EOF
+
+   # Note:  Remove backslashes and brackets to avoid problems with tcsh
+   set yerrors = `eval ${bindir}/yosys -s ${modulename}.ys |& sed -e "/\\/s#\\#/#g" \
+		-e "/\[/s/\[//g" -e "/\]/s/\]//g" | grep ERROR`
+   set yerrcnt = `echo $yerrors | wc -c`
+
+   if ($yerrcnt > 1) then
+      set yvalid = `echo $yerrors | grep "referenced in module" | wc -c`
+      # Check error message specific to a missing source file.
+      set ymissing = `echo $yerrors | grep "is not part of" | wc -c`
+      if (($ymissing > 1) && ($yvalid > 1)) then
+         set newdep = `echo $yerrors | cut -d " " -f 3 | cut -c3- | cut -d "'" -f 1`
+         set uniquedeplist = "${uniquedeplist} ${newdep}"
+      else
+         ${bindir}/yosys -s ${modulename}.ys >& ${synthlog}
+         echo "Errors detected in verilog source, need to be corrected." \
+		|& tee -a ${synthlog}
+         echo "See file ${synthlog} for error output."
+         echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+         exit 1
+      endif
+   endif
+
+   # end while ($yerrcnt > 1)
+   end
+
+# end if (! ($?source_file_list) )
+endif
 
 #---------------------------------------------------------------------
 # Generate the main yosys script
@@ -305,12 +412,31 @@ EOF
     end
 endif
 
-cat >> ${modulename}.ys << EOF
+# NOTE:  Using source_file_list, all files go into $uniquedeplist;  there
+# is no additional ${sourcename} file.
+
+if ( ! ( $?source_file_list )) then
+   if ( ${sourcename} != "" ) then
+      cat >> ${modulename}.ys << EOF
 read_verilog ${svopt} ${sourcename}
 EOF
+   endif
+endif
+
+if ( ! ( $?vext ) ) then
+   if ( "$svopt" == "" ) then
+      set vext = "v"
+   else
+      set vext = "sv"
+   endif
+endif
 
 foreach subname ( $uniquedeplist )
-    echo "read_verilog ${svopt} ${subname}.${vext}" >> ${modulename}.ys
+    if ( ${subname:e} == "" ) then
+       echo "read_verilog ${svopt} ${subname}.${vext}" >> ${modulename}.ys
+    else
+       echo "read_verilog ${svopt} ${subname}" >> ${modulename}.ys
+    endif
 end
 
 # Will not support yosys 0.0.x syntax; flag a warning instead
