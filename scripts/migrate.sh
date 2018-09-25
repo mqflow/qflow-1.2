@@ -231,6 +231,7 @@ ext2spice cthresh infinite
 ext2spice rthresh infinite
 ext2spice blackbox on
 ext2spice subcircuit top auto
+ext2spice global off
 ext2spice
 quit -noprompt
 EOF
