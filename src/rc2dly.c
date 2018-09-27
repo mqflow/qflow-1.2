@@ -52,9 +52,9 @@
 #define FORMAT_SPEF  1
 #define FORMAT_SDF   2
 
-#define VISIT_CONN 0
-#define VISIT_CAP  1
-#define VISIT_RES  2
+#define VISIT_CONN  0
+#define VISIT_CAP   1
+#define VISIT_RES   2
 
 typedef struct _r *rptr;
 typedef struct _node *nodeptr;
@@ -76,6 +76,7 @@ typedef struct _ritem {
 
 typedef struct _node {
     char*       name;
+    char	mapped[10];
     int         type;
     ritemptr    rlist;
     ritemptr    rlist_end;	/* To avoid having to find the list end */
@@ -177,6 +178,7 @@ nodeptr create_node (char *name, int type, double nodeCap) {
     new_node->totCapDownstream = 0.0;
     new_node->totCapDownstreamLessGates = 0.0;
     new_node->visited = 0;
+    new_node->mapped[0] = '\0';
 
     return new_node;
 }
@@ -310,7 +312,7 @@ void add_snk (snkptr *snk_list_ptr, snkptr snk) {
 
 /* Recursive routine to visit all nodes of a net */
 
-static int nid;
+static int nid, snid, net_idx;
 
 void visit_nodes(
 	nodeptr	curr_node,
@@ -319,35 +321,43 @@ void visit_nodes(
 	FILE *outfile
 	) {
 
+    char type;
     ritemptr curr_ritem;
 
     switch (mode) {
 	case VISIT_CONN:
+	    type = 'I';
+	    if (!strncmp(curr_node->name, "PIN/", 4)) {
+		type = 'P';
+	    }
 	    if (curr_node->type == SNK) {
-		fprintf(outfile, "*I %s *L %g\n", curr_node->name,
-			curr_node->nodeCap);
+		fprintf(outfile, "*%c %s I", type, curr_node->mapped);
+		if (type == 'I')
+		    fprintf(outfile, " *L %g", curr_node->nodeCap);
+		fprintf(outfile, "\n");
 	    }
 	    else if (curr_node->type == SRC) {
 		char *gateend;
 		char *sepptr = strrchr(curr_node->name, '/');
+		fprintf(outfile, "*%c %s O", type, curr_node->mapped);
 		if (sepptr != NULL) {
-		    fprintf(outfile, "*P %s ", curr_node->name);
 		    *sepptr = '\0';
 		    gateend = strrchr(curr_node->name, '_');
 		    *sepptr = '/';
 		    if (gateend != NULL) {
 			*gateend = '\0';
-			fprintf(outfile, "*D %s\n", curr_node->name);
+			fprintf(outfile, " *D %s", curr_node->name);
 			*gateend = '_';
 		    }
 		}
+		fprintf(outfile, "\n");
 	    }
 	    break;
 	case VISIT_CAP:
 	    if (curr_node->type == INT) {
-		nid++;
-		fprintf(outfile, "%d %s %g\n", nid,
-			curr_node->name,
+		snid++;
+		fprintf(outfile, "%d %s %g\n", snid,
+			curr_node->mapped,
 			curr_node->nodeCap);
 	    }
 	    break;
@@ -360,12 +370,13 @@ void visit_nodes(
 	    case VISIT_RES:
 		// NOTE:  Node pairs get visited twice in succession,
 		// so output only once per pair.
-		nid++;
-		if (nid % 2)
-		    fprintf(outfile, "%d %s %s %g\n", nid >> 1,
-				curr_ritem->r->node1->name,
-				curr_ritem->r->node2->name,
+		snid++;
+		if (snid % 2) {
+		    fprintf(outfile, "%d %s %s %g\n", snid >> 1,
+				curr_ritem->r->node1->mapped,
+				curr_ritem->r->node2->mapped,
 				curr_ritem->r->rval);
+		}
 		break;
 	}
         if ((curr_ritem->r->node1 != prev_node) &&
@@ -470,6 +481,7 @@ int main (int argc, char* argv[]) {
     Cell *cells, *newcell;
     Pin *newpin;
     char* libfilename;
+    char* nodenameptr;
     char* design = NULL;
     char* dotptr = NULL;
 
@@ -487,7 +499,6 @@ int main (int argc, char* argv[]) {
     //  Elmore Delay
     node_item_ptr drivers = NULL;
     node_item_ptr last_driver = NULL;
-    int numDrivers = 0;
     int format = FORMAT_VESTA;
 
     // list of all Rs for debugging and to easily free them at end
@@ -618,6 +629,7 @@ int main (int argc, char* argv[]) {
     size_t nbytes = LIB_LINE_MAX;
     line = calloc(1, LIB_LINE_MAX);
     int bytesRead = 0;
+    int num_net_drivers;
 
     const char delims[3] = " \n";
 
@@ -640,24 +652,41 @@ int main (int argc, char* argv[]) {
 	fprintf(outfile, "*VENDOR \"%s\"\n", "unknown");
 	fprintf(outfile, "*PROGRAM \"%s\"\n", "qrouter");
 	fprintf(outfile, "*VERSION \"%s\"\n", "unknown");
-	fprintf(outfile, "*DELIMITER/\n");
+	fprintf(outfile, "*DELIMITER /\n");
 	fprintf(outfile, "*T_UNIT 1 PS\n");
 	fprintf(outfile, "*C_UNIT 1 FF\n");
 	fprintf(outfile, "*R_UNIT 1 OHM\n");
 	fprintf(outfile, "*L_UNIT 1 HENRY\n");
 	fprintf(outfile, "\n");
-	fprintf(outfile, "*PORTS\n");
+	fprintf(outfile, "*NAME_MAP\n");
 
-	/* Parse entire file once to get all port names, which are the	*/
-	/* entries ending with "/PIN".					*/
+	/* Parse entire file once to get all node names.  These will be	*/
+	/* assigned numerical values in the order seen, so they can be	*/
+	/* referenced later with the same numerical value.  This avoids	*/
+	/* having to recast the node name to conform to SPEF rules.	*/
 
+        nid = 1;
 	while ((bytesRead = getline(&line, &nbytes, rcfile)) > 0) {
 	    if (bytesRead > 2) {
-		tokens = tokenize_line(line, delims, &tokens, &num_toks);
-		for (t = 2; t < num_toks; t++) {
-		    if (!strncmp(tokens[t], "PIN/", 4)) {
-			fprintf(outfile, "*%s %c\n", tokens[t] + 4,
-					(t == 2) ? 'I' : 'O');
+	        tokens = tokenize_line(line, delims, &tokens, &num_toks);
+		// Count nodes per line.  Drivers are named nodes unless
+		// they are pins (redundant name), and the third token
+		// after an open parenthesis is a named node if it is not
+		// another open parenthesis.  The net name is not a node
+		// but gets its own name identifier.
+	        fprintf(outfile, "*%d %s\n", nid++, tokens[0]);
+                num_net_drivers = atoi(tokens[1]);
+		for (t = 2; t < num_net_drivers + 2; t++)  {
+	            if (strncmp(tokens[t], "PIN/", 4))
+			fprintf(outfile, "*%d %s\n", nid++, tokens[t]);
+		}
+	        for (; t < num_toks; t++) {
+	            if (!strcmp(tokens[t], "(")) {
+	                if (strcmp(tokens[t + 3], "(")) {
+			    nodenameptr = tokens[t + 3];
+			    if (!strncmp(nodenameptr, "PIN/", 4)) nodenameptr += 4;
+			    fprintf(outfile, "*%d %s\n", nid++, nodenameptr);
+			}
 		    }
 		}
 	    }
@@ -665,7 +694,42 @@ int main (int argc, char* argv[]) {
 	fprintf(outfile, "\n");
 
 	/* Go back to the beginning of the file */
-        rewind(rcfile);
+	rewind(rcfile);
+
+	fprintf(outfile, "*PORTS\n");
+
+	/* Parse entire file a second time to get all port names, which	*/
+	/* are the entries ending with "/PIN".                          */
+
+        nid = 1;
+	while ((bytesRead = getline(&line, &nbytes, rcfile)) > 0) {
+	    if (bytesRead > 2) {
+	        tokens = tokenize_line(line, delims, &tokens, &num_toks);
+		// Count nodes per line, as above.
+
+		nid++;
+                num_net_drivers = atoi(tokens[1]);
+		for (t = 2; t < 2 + num_net_drivers; t++) {
+		    if (!strncmp(tokens[t], "PIN/", 4))
+			fprintf(outfile, "*%d I\n", nid);
+		    else
+			nid++;
+		}
+	        for (; t < num_toks; t++) {
+	            if (!strcmp(tokens[t], "(")) {
+	                if (strcmp(tokens[t + 3], "(")) {
+			    if (!strncmp(tokens[t + 3], "PIN/", 4))
+	                	fprintf(outfile, "*%d O\n", nid);
+			    nid++;
+			}
+		    }
+		}
+	    }
+	}
+	fprintf(outfile, "\n");
+
+	/* Go back to the beginning of the file */
+	rewind(rcfile);
     }
     else if (format == FORMAT_SDF) {
 	char outstr[200];
@@ -705,12 +769,13 @@ int main (int argc, char* argv[]) {
     // 4) num receivers
     //
 
-    int num_net_drivers = 0;
     int num_rxers = 0;
     int t = 0;
     Cell *cell;
     node_item_ptr tmp_nip = NULL;
 
+    num_net_drivers = 0;
+    nid = 1;
     while (bytesRead > 0) {
 
         // skip blank lines
@@ -719,6 +784,7 @@ int main (int argc, char* argv[]) {
             tokens = tokenize_line(line, delims, &tokens, &num_toks);
 
             t = 0;
+	    net_idx = nid;	/* net takes the next name ID */
 
 	    if (verbose > 3)
                 fprintf(stdout, "\nProcessing net %s\n", tokens[0]);
@@ -732,6 +798,8 @@ int main (int argc, char* argv[]) {
 
             // process drivers
             for (; t < (2 + num_net_drivers); t++) {
+		// If driver name is a pin then the name ID doesn't increment;
+		if (strncmp(tokens[t], "PIN/", 4)) nid++;
 	        if (verbose > 3)
                     fprintf(stdout, "TBD: process driver number %d %s\n", t-2, tokens[t]);
             }
@@ -762,12 +830,13 @@ int main (int argc, char* argv[]) {
 
                         // create a new node, this one is the first (driving) node of the interconnect
                         currnode = create_node(tokens[2], SRC, 0);
+			sprintf(currnode->mapped, "*%d", nid++);
 
                         if (verbose > 1) print_node(currnode);
 
                         // add node to list of drivers
                         add_node_item(&drivers, currnode, &last_driver);
-                        numDrivers += 1;
+			num_net_drivers++;
 
                         // add node to current node stack
                         add_node_item(&currNodeStack, currnode, &currNodeStack);
@@ -783,9 +852,10 @@ int main (int argc, char* argv[]) {
                         fprintf(stderr, "ERROR: sprintf failed to create interconnect node name\n");
                         return 2;
                     }
-                    nodeNum += 1;
                     // create the new node
                     currnode = create_node(name, INT, atof(tokens[t+2]));
+		    sprintf(currnode->mapped, "%d_%d", net_idx, nodeNum);
+                    nodeNum++;
 
                     if (verbose > 1) {
                         print_node(currnode);
@@ -854,6 +924,7 @@ int main (int argc, char* argv[]) {
 
                     // create the new node
                     currnode = create_node(name, SNK, 0);
+		    sprintf(currnode->mapped, "*%d", nid++);
 
                     if (verbose > 1) print_node(currnode);
                     name = calloc(1, sizeof(char) * (strlen(tokens[0]) + 10));
@@ -994,26 +1065,27 @@ int main (int argc, char* argv[]) {
                 fprintf(outfile, "\n");
 	    }
 	    else if (format == FORMAT_SPEF) {
+		/* Write SPEF file format output for each net */
 
-		/* Write SPEF file format output */
-		nid = 0;
-		fprintf(outfile, "*D_NET %s %g\n",
-			currElm->name, currElm->src->totCapDownstreamLessGates);
+		fprintf(outfile, "*D_NET *%d %g\n",
+			net_idx, currElm->src->totCapDownstreamLessGates);
 
 		fprintf(outfile, "*CONN\n");
+
 		/* Visit drivers and receivers */
 		visit_nodes(last_driver->node, NULL, VISIT_CONN, outfile);
 
 		fprintf(outfile, "*CAP\n");
-		nid = 0;
+		snid = 0;
 		/* Visit nodes of the net and output lumped parasitic caps */
 		visit_nodes(last_driver->node, NULL, VISIT_CAP, outfile);
 
 		fprintf(outfile, "*RES\n");
-		nid = 1;
+		snid = 1;
 		/* Visit nodes of the net and output branch resistances */
 		visit_nodes(last_driver->node, NULL, VISIT_RES, outfile);
 
+		fprintf(outfile, "*END\n");
 	    }
 	    else {		/* (format == FORMAT_SDF) */
                 calculate_elmore_delay(
