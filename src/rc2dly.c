@@ -681,13 +681,10 @@ int main (int argc, char* argv[]) {
 			fprintf(outfile, "*%d %s\n", nid++, tokens[t]);
 		}
 	        for (; t < num_toks; t++) {
-	            if (!strcmp(tokens[t], "(")) {
-	                if (strcmp(tokens[t + 3], "(")) {
-			    nodenameptr = tokens[t + 3];
-			    if (!strncmp(nodenameptr, "PIN/", 4)) nodenameptr += 4;
-			    fprintf(outfile, "*%d %s\n", nid++, nodenameptr);
-			}
-		    }
+	            if (!strcmp(tokens[t], "("))
+	                if (strcmp(tokens[t + 3], "("))
+			    if (strncmp(tokens[t + 3], "PIN/", 4))
+			       fprintf(outfile, "*%d %s\n", nid++, tokens[t + 3]);
 		}
 	    }
 	}
@@ -707,11 +704,11 @@ int main (int argc, char* argv[]) {
 	        tokens = tokenize_line(line, delims, &tokens, &num_toks);
 		// Count nodes per line, as above.
 
-		nid++;
+		net_idx = nid++;
                 num_net_drivers = atoi(tokens[1]);
 		for (t = 2; t < 2 + num_net_drivers; t++) {
 		    if (!strncmp(tokens[t], "PIN/", 4))
-			fprintf(outfile, "*%d I\n", nid);
+			fprintf(outfile, "*%d I\n", net_idx);
 		    else
 			nid++;
 		}
@@ -719,8 +716,9 @@ int main (int argc, char* argv[]) {
 	            if (!strcmp(tokens[t], "(")) {
 	                if (strcmp(tokens[t + 3], "(")) {
 			    if (!strncmp(tokens[t + 3], "PIN/", 4))
-	                	fprintf(outfile, "*%d O\n", nid);
-			    nid++;
+	                	fprintf(outfile, "*%d O\n", net_idx);
+			    else
+				nid++;
 			}
 		    }
 		}
@@ -784,7 +782,7 @@ int main (int argc, char* argv[]) {
             tokens = tokenize_line(line, delims, &tokens, &num_toks);
 
             t = 0;
-	    net_idx = nid;	/* net takes the next name ID */
+	    net_idx = nid++;	/* net takes the next name ID */
 
 	    if (verbose > 3)
                 fprintf(stdout, "\nProcessing net %s\n", tokens[0]);
@@ -798,8 +796,6 @@ int main (int argc, char* argv[]) {
 
             // process drivers
             for (; t < (2 + num_net_drivers); t++) {
-		// If driver name is a pin then the name ID doesn't increment;
-		if (strncmp(tokens[t], "PIN/", 4)) nid++;
 	        if (verbose > 3)
                     fprintf(stdout, "TBD: process driver number %d %s\n", t-2, tokens[t]);
             }
@@ -830,7 +826,11 @@ int main (int argc, char* argv[]) {
 
                         // create a new node, this one is the first (driving) node of the interconnect
                         currnode = create_node(tokens[2], SRC, 0);
-			sprintf(currnode->mapped, "*%d", nid++);
+			// If driver name is a pin then the name ID is the net name ID
+			if (!strncmp(tokens[2], "PIN/", 4))
+			    sprintf(currnode->mapped, "*%d", net_idx);
+			else
+			    sprintf(currnode->mapped, "*%d", nid++);
 
                         if (verbose > 1) print_node(currnode);
 
@@ -924,7 +924,11 @@ int main (int argc, char* argv[]) {
 
                     // create the new node
                     currnode = create_node(name, SNK, 0);
-		    sprintf(currnode->mapped, "*%d", nid++);
+		    // If driver name is a pin then the name ID is the net name ID
+		    if (!strncmp(tokens[t], "PIN/", 4))
+			sprintf(currnode->mapped, "*%d", net_idx);
+		    else
+			sprintf(currnode->mapped, "*%d", nid++);
 
                     if (verbose > 1) print_node(currnode);
                     name = calloc(1, sizeof(char) * (strlen(tokens[0]) + 10));
