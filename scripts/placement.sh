@@ -149,6 +149,63 @@ if ( ${errcond} == 1 ) then
    exit 1
 endif
 
+#---------------------------------------------------
+# Create .info file from qrouter
+#---------------------------------------------------
+
+cd ${layoutdir}
+
+# First prepare a simple .cfg file that can be used to point qrouter
+# to the LEF files when generating layer information using the "-i" option.
+# This also contains the scaling units used in the .cel and .def files.
+
+#------------------------------------------------------------------
+# Determine the version number and availability of scripting
+# in qrouter.
+#------------------------------------------------------------------
+
+set version=`${bindir}/qrouter -v 0 -h | tail -1`
+set major=`echo $version | cut -d. -f1`
+set minor=`echo $version | cut -d. -f2`
+set subv=`echo $version | cut -d. -f3`
+set scripting=`echo $version | cut -d. -f4`
+
+# Create the initial (bootstrap) configuration file
+
+if ( $scripting == "T" ) then
+   if ( "$techleffile" == "" ) then
+      echo "read_lef ${lefpath}" > ${rootname}.cfg
+   else
+      echo "read_lef ${techlefpath}" > ${rootname}.cfg
+   endif
+else
+   if ( "$techleffile" == "" ) then
+      echo "lef ${lefpath}" > ${rootname}.cfg
+   else
+      echo "lef ${techlefpath}" > ${rootname}.cfg
+   endif
+endif
+
+${bindir}/qrouter -i ${rootname}.info -c ${rootname}.cfg
+
+#---------------------------------------------------------------------
+# Spot check:  Did qrouter produce file ${rootname}.info?
+#---------------------------------------------------------------------
+
+if ( !( -f ${rootname}.info || \
+	( -f ${rootname}.info && -M ${rootname}.info < -M ${rootname}.pin ))) then
+   echo "qrouter (-i) failure:  No file ${rootname}.info." |& tee -a ${synthlog}
+   echo "Premature exit." |& tee -a ${synthlog}
+   echo "Synthesis flow stopped due to error condition." >> ${synthlog}
+   exit 1
+endif
+
+# Pull scale units from the .info file.  Default units are centimicrons.
+set units=`cat ${rootname}.info | grep units | cut -d' ' -f3`
+if ( "${units}" == "" ) then
+    set units=100
+endif
+
 #-------------------------------------------------------------------------
 # Create the .cel file for GrayWolf
 #-------------------------------------------------------------------------
@@ -290,15 +347,15 @@ if ( ${?initial_density} ) then
    echo "Running decongest to set initial density of ${initial_density}" \
 		|& tee -a ${synthlog}
    if ( ${?fill_ratios} ) then
-        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density} ${fill_ratios}" \
+        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density} ${fill_ratios} --units=${units}" \
 		|& tee -a ${synthlog}
 	${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
-		${fillers} ${initial_density} ${fill_ratios} |& tee -a ${synthlog}
+		${fillers} ${initial_density} ${fill_ratios} --units=${units} |& tee -a ${synthlog}
    else
-        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density}" \
+        echo "decongest.tcl ${rootname} ${lefpath} ${fillers} ${initial_density} --units=${units}" \
 		|& tee -a ${synthlog}
 	${scriptdir}/decongest.tcl ${rootname} ${lefpath} \
-		${fillers} ${initial_density} |& tee -a ${synthlog}
+		${fillers} ${initial_density} --units=${units} |& tee -a ${synthlog}
    endif
    set errcond = $status
    if ( ${errcond} != 0 ) then
@@ -407,51 +464,7 @@ endif
 # 2) Prepare DEF and .cfg files for qrouter
 #---------------------------------------------------
 
-# First prepare a simple .cfg file that can be used to point qrouter
-# to the LEF files when generating layer information using the "-i" option.
-
 if ($makedef == 1) then
-
-   #------------------------------------------------------------------
-   # Determine the version number and availability of scripting
-   # in qrouter.
-   #------------------------------------------------------------------
-
-   set version=`${bindir}/qrouter -v 0 -h | tail -1`
-   set major=`echo $version | cut -d. -f1`
-   set minor=`echo $version | cut -d. -f2`
-   set subv=`echo $version | cut -d. -f3`
-   set scripting=`echo $version | cut -d. -f4`
-
-   # Create the initial (bootstrap) configuration file
-
-   if ( $scripting == "T" ) then
-      if ( "$techleffile" == "" ) then
-         echo "read_lef ${lefpath}" > ${rootname}.cfg
-      else
-         echo "read_lef ${techlefpath}" > ${rootname}.cfg
-      endif
-   else
-      if ( "$techleffile" == "" ) then
-         echo "lef ${lefpath}" > ${rootname}.cfg
-      else
-         echo "lef ${techlefpath}" > ${rootname}.cfg
-      endif
-   endif
-
-   ${bindir}/qrouter -i ${rootname}.info -c ${rootname}.cfg
-
-   #---------------------------------------------------------------------
-   # Spot check:  Did qrouter produce file ${rootname}.info?
-   #---------------------------------------------------------------------
-
-   if ( !( -f ${rootname}.info || \
-	( -f ${rootname}.info && -M ${rootname}.info < -M ${rootname}.pin ))) then
-      echo "qrouter (-i) failure:  No file ${rootname}.info." |& tee -a ${synthlog}
-      echo "Premature exit." |& tee -a ${synthlog}
-      echo "Synthesis flow stopped due to error condition." >> ${synthlog}
-      exit 1
-   endif
 
    echo "Running getantennacell to determine cell to use for antenna anchors." \
 	|& tee -a ${synthlog}

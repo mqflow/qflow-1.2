@@ -45,11 +45,41 @@
 # of congestion information.  The fill cells will be randomly
 # placed.  There is no default density.
 #
+# Option --units=<units> where units are distance units per micron
+# in the .cel file (default 100)
+#
 #------------------------------------------------------------
 # Written by Tim Edwards, November 23, 2013
 #------------------------------------------------------------
 # LEF dimensions are microns unless otherwise stated.
 #------------------------------------------------------------
+
+# To-do:  Just split the argument list into options and arguments,
+# where options begin with "--".  For now, just assume options come
+# at the end.
+
+set units 100
+
+while {true} {
+    set option [lindex $argv $argc-1]
+    if {[string first "--" $option] == 0} {
+	incr argc -1
+	set optkey [string range $option 2 end]
+        set eqptr [string first "=" $optkey]
+	if {$eqptr > 0} {
+	    set optval [string range $optkey $eqptr+1 end]
+	    set optkey [string range $optkey 0 $eqptr-1]
+	} else {
+	    set optval true
+	}
+	switch -exact $optkey {
+	    units {set units $optval}
+	    default {puts stderr "Unknown option switch $option"}
+	}
+    } else {
+	break
+    }
+}
 
 if {$argc < 4 || $argc > 7} {
    puts stderr "Bad argument list"
@@ -58,10 +88,10 @@ if {$argc < 4 || $argc > 7} {
    puts stderr "or:    decongest.tcl <rootname> <leffile> <fillcells> <density> <ratios>"
    puts stderr "<fillcell> is a comma-separated list of up to three fill cell types."
    puts stderr "<ratios> is a space-separated list of ratios for each fill cell type."
+   puts stderr "use option --units=<units> to set units other than centimicrons."
    exit 1
 }
 
-set units 100
 set scale 0.1
 set offset 0.5
 
@@ -559,6 +589,7 @@ while {[gets $fcel line] >= 0} {
 
          # Calculate aggregate cell width
 	 set cellwidth [expr {$right - $left}]
+         puts stdout "Diagnostic: instance $instname cell width = $cellwidth"
          incr aggwidth $cellwidth
 	 if {$instidx < 0} {
             puts $fanno $line	;# unknown cell, so output unchanged
@@ -566,6 +597,8 @@ while {[gets $fcel line] >= 0} {
          } else {
 	    set needfill [expr {$aggwidth * $fillratio}]
             set cstr ""
+	    set lastfill ""
+	    set lastwid 0
 	    while {$needfill > $fillagg} {
 	       set cwid 0
 	       foreach fillinfo $fillwidths {
@@ -578,10 +611,36 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr fillagg $cwid
 	       incr cellwidth $cwid
-	       set cstr ${cmac}.${cwid}.${cstr}
+               puts stdout "Diagnostic: add fill width = $cwid"
+               puts stdout "Diagnostic: new cell width = $cellwidth"
+	       if {$lastfill == ""} {
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       } elseif {$lastfill == $cmac} {
+		  incr multiplier
+	       } else {
+		  if {$multiplier == 1} {
+		     set cstr ${lastfill}.${lastwid}.${cstr}
+		  } else {
+		     set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+		  }
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       }
+	    }
+	    if {$lastfill != ""} {
+	       if {$multiplier == 1} {
+		  set cstr ${lastfill}.${lastwid}.${cstr}
+	       } else {
+		  set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+	       }
 	    }
 
 	    set needdecap [expr {$aggwidth * $decapratio}]
+	    set lastfill ""
+	    set lastwid 0
 	    while {$needdecap > $decapagg} {
 	       set cwid 0
 	       foreach decapinfo $decapwidths {
@@ -594,10 +653,36 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr decapagg $cwid
 	       incr cellwidth $cwid
-	       set cstr ${cmac}.${cwid}.${cstr}
+               puts stdout "Diagnostic: add decap width = $cwid"
+               puts stdout "Diagnostic: new cell width = $cellwidth"
+	       if {$lastfill == ""} {
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       } elseif {$lastfill == $cmac} {
+		  incr multiplier
+	       } else {
+		  if {$multiplier == 1} {
+		     set cstr ${lastfill}.${lastwid}.${cstr}
+		  } else {
+		     set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+		  }
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       }
+	    }
+	    if {$lastfill != ""} {
+	       if {$multiplier == 1} {
+		  set cstr ${lastfill}.${lastwid}.${cstr}
+	       } else {
+		  set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+	       }
 	    }
 
 	    set needantenna [expr {$aggwidth * $antennaratio}]
+	    set lastfill ""
+	    set lastwid 0
 	    while {$needantenna > $antennaagg} {
 	       set cwid 0
 	       foreach antennainfo $antennawidths {
@@ -610,11 +695,36 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr antennaagg $cwid
 	       incr cellwidth $cwid
-	       set cstr ${cmac}.${cwid}.${cstr}
+               puts stdout "Diagnostic: add antenna width = $cwid"
+               puts stdout "Diagnostic: new cell width = $cellwidth"
+	       if {$lastfill == ""} {
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       } elseif {$lastfill == $cmac} {
+		  incr multiplier
+	       } else {
+		  if {$multiplier == 1} {
+		     set cstr ${lastfill}.${lastwid}.${cstr}
+		  } else {
+		     set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+		  }
+		  set lastfill $cmac
+		  set lastwid $cwid
+		  set multiplier 1
+	       }
+	    }
+	    if {$lastfill != ""} {
+	       if {$multiplier == 1} {
+		  set cstr ${lastfill}.${lastwid}.${cstr}
+	       } else {
+		  set cstr ${lastfill}.${lastwid}X${multiplier}.${cstr}
+	       }
 	    }
             
 	    puts $fanno "cell $instnum ${cstr}${instname}"
 
+            puts stdout "Diagnostic: final cell width = $cellwidth"
 	    set fleft [expr {-($cellwidth / 2)}]
 	    set fright [expr {$fleft + $cellwidth}]
 	    puts $fanno "left $fleft right $fright $rest"

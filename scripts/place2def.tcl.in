@@ -530,9 +530,14 @@ while {[gets $fpl1 line] >= 0} {
    if {[string equal -length 6 $instance twpin_]} {
       incr numpins
    } else {
-      while {[regexp {[^ \t.]+\.[0-9]+\.([^ \t]+)} $instance lmatch rest] == 1} {
-	 incr numcomps
-	 incr numfill
+      while {[regexp {[^ \t.]+\.([0-9X]+)\.([^ \t]+)} $instance lmatch fillspec rest] == 1} {
+	 if [regexp {[0-9]+X([0-9]+)} $fillspec lmatch fmult] {
+	     incr numcomps $fmult
+	     incr numfill $fmult
+	 } else {
+	     incr numcomps
+	     incr numfill
+	 }
          set instance $rest
       }
       incr numcomps
@@ -670,20 +675,27 @@ while {[gets $fpl1 line] >= 0} {
 	 set rest $instance
 
          set i 0
-	 while {[regexp {([^ \t.]+)\.([0-9]+)\.([^ \t]+)} $rest \
-			lmatch fillcell fillwidth rest] == 1} {
+	 while {[regexp {([^ \t.]+)\.([0-9X]+)\.([^ \t]+)} $rest \
+			lmatch fillcell fillspec rest] == 1} {
 
+	    if {![regexp {([0-9]+)X([0-9]+)} $fillspec lmatch fillwidth fmult]} {
+		set fillwidth $fillspec
+		set fmult 1
+ 	    }
 	    set llyoff [expr $lly - $cellybot]
-	    set llxoff [expr $llx - $cellxbot]
 
-	    set outllxoff [expr int($llxoff * $multiplier)]
-	    set outllyoff [expr int($llyoff * $multiplier)]
-	    incr numcomps -1
-	    set instname ${fillcell}_${i}_$baseinst
-	    puts $fdef "- $instname $fillcell + PLACED ( $outllxoff $outllyoff ) $ostr ;"
-	    lappend fillinsts [list $instname $fillcell]
-	    set llx [expr $llx + $fillwidth]
-	    incr i
+	    for {set j 0} {$j < $fmult} {incr j} {
+	       set llxoff [expr $llx - $cellxbot]
+
+	       set outllxoff [expr int($llxoff * $multiplier)]
+	       set outllyoff [expr int($llyoff * $multiplier)]
+	       incr numcomps -1
+	       set instname ${fillcell}_${i}_$baseinst
+	       puts $fdef "- $instname $fillcell + PLACED ( $outllxoff $outllyoff ) $ostr ;"
+	       lappend fillinsts [list $instname $fillcell]
+	       set llx [expr $llx + $fillwidth]
+	       incr i
+	    }
 	 }
 
          # Get cellname from instance name.
@@ -800,7 +812,7 @@ while {[gets $fpin line] >= 0} {
    # Rip the filler cell name off the beginning of instances where
    # they were spliced in
 
-   while {[regexp {[^ \t.]+\.[0-9]+\.([^ \t]+)} $instance lmatch rest] == 1} {
+   while {[regexp {[^ \t.]+\.[0-9X]+\.([^ \t]+)} $instance lmatch rest] == 1} {
       set instance $rest
    }
 
