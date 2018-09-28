@@ -859,6 +859,7 @@ echo "	 ${synthdir}" |& tee -a ${synthlog}
 echo "Files:" |& tee -a ${synthlog}
 echo "   Verilog: ${synthdir}/${modulename}.rtl.v" |& tee -a ${synthlog}
 echo "   Verilog: ${synthdir}/${modulename}.rtlnopwr.v" |& tee -a ${synthlog}
+echo "   Verilog: ${synthdir}/${modulename}.rtlbb.v" |& tee -a ${synthlog}
 echo "   Spice:   ${synthdir}/${modulename}.spc" |& tee -a ${synthlog}
 echo "" >> ${synthlog}
 
@@ -866,8 +867,13 @@ echo "Running blif2Verilog." |& tee -a ${synthlog}
 ${bindir}/blif2Verilog -c -v ${vddnet} -g ${gndnet} ${modulename}.blif \
 	> ${modulename}.rtl.v
 
+# Version without explicit power and ground
 ${bindir}/blif2Verilog -c -p -v ${vddnet} -g ${gndnet} ${modulename}.blif \
 	> ${modulename}.rtlnopwr.v
+
+# Version without vectors
+${bindir}/blif2Verilog -c -p -b -v ${vddnet} -g ${gndnet} ${modulename}.blif \
+	> ${modulename}.rtlbb.v
 
 #---------------------------------------------------------------------
 # Spot check:  Did blif2Verilog exit with an error?
@@ -884,6 +890,12 @@ endif
 if ( !( -f ${modulename}.rtlnopwr.v || \
         ( -M ${modulename}.rtlnopwr.v < -M ${modulename}.blif ))) then
    echo "blif2Verilog failure:  No file ${modulename}.rtlnopwr.v created." \
+                |& tee -a ${synthlog}
+endif
+
+if ( !( -f ${modulename}.rtlbb.v || \
+        ( -M ${modulename}.rtlbb.v < -M ${modulename}.blif ))) then
+   echo "blif2Verilog failure:  No file ${modulename}.rtlbb.v created." \
                 |& tee -a ${synthlog}
 endif
 

@@ -269,6 +269,9 @@ if (${scripting} == "T") then
       if ( -f ${synthdir}/${rootname}.rtl.anno.v ) then
 	 mv ${synthdir}/${rootname}.rtl.anno.v ${synthdir}/${rootname}.rtl.v 
       endif
+      if ( -f ${synthdir}/${rootname}.rtlbb.anno.v ) then
+	 mv ${synthdir}/${rootname}.rtlbb.anno.v ${synthdir}/${rootname}.rtlbb.v 
+      endif
       if ( -f ${synthdir}/${rootname}.anno.spc ) then
 	 mv ${synthdir}/${rootname}.anno.spc ${synthdir}/${rootname}.spc
       endif

@@ -139,10 +139,18 @@ if ($dodelays == 1) then
 
        # Run rc2dly again to get SPEF format file
        echo "Converting qrouter output to SPEF delay format" |& tee -a ${synthlog}
-       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.spef" \
+       echo "Running rc2dly -D : -r ${rootname}.rc -l ${libertypath} -d ${rootname}.spef" \
 		|& tee -a ${synthlog}
-       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
+       ${bindir}/rc2dly -D : -r ${rootname}.rc -l ${libertypath} \
 		-d ${synthdir}/${rootname}.spef
+
+       # Translate <, >, and $ in file to _ to match the verilog.
+       if ( -f ${synthdir}/${rootname}.spef ) then
+	  cat ${synthdir}/${rootname}.spef | sed \
+		-e 's/\$/_/g' -e 's/</_/g' -e 's/>/_/g' \
+		> ${synthdir}/${rootname}.spefx
+	  mv ${synthdir}/${rootname}.spefx ${synthdir}/${rootname}.spef
+       endif
 
        # Run rc2dly again to get SDF format file
        echo "Converting qrouter output to SDF delay format" |& tee -a ${synthlog}

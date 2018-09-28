@@ -794,6 +794,7 @@ if ($makedef == 1) then
       echo "Files:" |& tee -a ${synthlog}
       echo "   Verilog: ${synthdir}/${rootname}.rtl.v" |& tee -a ${synthlog}
       echo "   Verilog: ${synthdir}/${rootname}.rtlnopwr.v" |& tee -a ${synthlog}
+      echo "   Verilog: ${synthdir}/${rootname}.rtlbb.v" |& tee -a ${synthlog}
       echo "   Spice:   ${synthdir}/${rootname}.spc" |& tee -a ${synthlog}
       echo "" >> ${synthlog}
 
@@ -804,9 +805,10 @@ if ($makedef == 1) then
       # pre- and post-placement netlists.
       #------------------------------------------------------------------
 
-      echo "Copying ${rootname}.rtl.v and ${rootname}.rtlnopwr.v to backups"
+      echo "Copying ${rootname}.rtl.v, ${rootname}.rtlnopwr.v, and ${rootname}.rtlbb.v to backups"
       cp ${rootname}.rtl.v ${rootname}_synth.rtl.v
       cp ${rootname}.rtlnopwr.v ${rootname}_synth.rtlnopwr.v
+      cp ${rootname}.rtlbb.v ${rootname}_synth.rtlbb.v
 
       echo "Running blif2Verilog." |& tee -a ${synthlog}
       ${bindir}/blif2Verilog -c -v ${vddnet} -g ${gndnet} \
@@ -814,6 +816,9 @@ if ($makedef == 1) then
 
       ${bindir}/blif2Verilog -c -p -v ${vddnet} -g ${gndnet} \
 		${rootname}_anno.blif > ${rootname}.rtlnopwr.v
+
+      ${bindir}/blif2Verilog -c -b -p -v ${vddnet} -g ${gndnet} \
+		${rootname}_anno.blif > ${rootname}.rtlbb.v
 
       echo "Running blif2BSpice." |& tee -a ${synthlog}
       ${bindir}/blif2BSpice -i -p ${vddnet} -g ${gndnet} -l \
@@ -833,6 +838,12 @@ if ($makedef == 1) then
       if ( !( -f ${rootname}.rtlnopwr.v || ( -f ${rootname}.rtlnopwr.v && \
 		-M ${rootname}.rtlnopwr.v < -M ${rootname}_anno.blif ))) then
 	 echo "blif2Verilog failure:  No file ${rootname}.rtlnopwr.v created." \
+		|& tee -a ${synthlog}
+      endif
+
+      if ( !( -f ${rootname}.rtlbb.v || ( -f ${rootname}.rtlbb.v && \
+		-M ${rootname}.rtlbb.v < -M ${rootname}_anno.blif ))) then
+	 echo "blif2Verilog failure:  No file ${rootname}.rtlbb.v created." \
 		|& tee -a ${synthlog}
       endif
 

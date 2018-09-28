@@ -484,6 +484,7 @@ int main (int argc, char* argv[]) {
     char* nodenameptr;
     char* design = NULL;
     char* dotptr = NULL;
+    char  delimiter = '/';
 
     nodeptr currnode = NULL;
     rptr    currR    = NULL;
@@ -516,6 +517,7 @@ int main (int argc, char* argv[]) {
             {"liberty-file" , required_argument , 0, 'l'},
             {"delay-file"   , required_argument , 0, 'd'},
             {"pin-capacitance"   , required_argument , 0, 'c'},
+            {"delimiter"    , required_argument , 0, 'D'},
             {"verbose"      , required_argument , 0, 'v'},
             {"help"         , no_argument       , 0, 'h'},
             {0, 0, 0, 0}
@@ -524,7 +526,7 @@ int main (int argc, char* argv[]) {
         /* getopt_long stores the option index here. */
         int option_index = 0;
 
-        c = getopt_long (argc, argv, "hv:r:l:d:", long_options, &option_index);
+        c = getopt_long (argc, argv, "hv:r:l:d:D:", long_options, &option_index);
 
         /* Detect the end of the options. */
         if (c == -1)
@@ -549,6 +551,13 @@ int main (int argc, char* argv[]) {
                 if (!rcfile) {
                     fprintf(stderr, "ERROR: Unable to open input RC file `%s': %s\n", optarg, strerror(errno));
                 }
+                break;
+
+            case 'D':
+		delimiter = optarg[0];
+		if (optarg[1] != '\0')
+		    fprintf(stderr, "ERROR: Delimiter \"%s\" must be one character: %s\n",
+				optarg, strerror(errno));
                 break;
 
             case 'l':
@@ -640,6 +649,7 @@ int main (int argc, char* argv[]) {
 	char outstr[200];
 	time_t t;
 	struct tm *tmp;
+	char *dptr;
 
 	/* Write SPEF file format output header */
 	t = time(NULL);
@@ -652,7 +662,7 @@ int main (int argc, char* argv[]) {
 	fprintf(outfile, "*VENDOR \"%s\"\n", "unknown");
 	fprintf(outfile, "*PROGRAM \"%s\"\n", "qrouter");
 	fprintf(outfile, "*VERSION \"%s\"\n", "unknown");
-	fprintf(outfile, "*DELIMITER /\n");
+	fprintf(outfile, "*DELIMITER %c\n", delimiter);
 	fprintf(outfile, "*T_UNIT 1 PS\n");
 	fprintf(outfile, "*C_UNIT 1 FF\n");
 	fprintf(outfile, "*R_UNIT 1 OHM\n");
@@ -674,17 +684,25 @@ int main (int argc, char* argv[]) {
 		// after an open parenthesis is a named node if it is not
 		// another open parenthesis.  The net name is not a node
 		// but gets its own name identifier.
+		if ((dptr = strrchr(tokens[0], '/')) != NULL)
+		    *dptr = delimiter;
 	        fprintf(outfile, "*%d %s\n", nid++, tokens[0]);
                 num_net_drivers = atoi(tokens[1]);
 		for (t = 2; t < num_net_drivers + 2; t++)  {
-	            if (strncmp(tokens[t], "PIN/", 4))
+	            if (strncmp(tokens[t], "PIN/", 4)) {
+			if ((dptr = strrchr(tokens[t], '/')) != NULL)
+			    *dptr = delimiter;
 			fprintf(outfile, "*%d %s\n", nid++, tokens[t]);
+		    }
 		}
 	        for (; t < num_toks; t++) {
 	            if (!strcmp(tokens[t], "("))
 	                if (strcmp(tokens[t + 3], "("))
-			    if (strncmp(tokens[t + 3], "PIN/", 4))
-			       fprintf(outfile, "*%d %s\n", nid++, tokens[t + 3]);
+			    if (strncmp(tokens[t + 3], "PIN/", 4)) {
+				if ((dptr = strrchr(tokens[t + 3], '/')) != NULL)
+				    *dptr = delimiter;
+				fprintf(outfile, "*%d %s\n", nid++, tokens[t + 3]);
+			    }
 		}
 	    }
 	}

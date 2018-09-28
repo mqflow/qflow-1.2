@@ -39,8 +39,8 @@ struct Vect {
 	int Max;
 };
 
-void ReadNetlistAndConvert(FILE *, FILE *, int, int);
-void CleanupString(char text[]);
+void ReadNetlistAndConvert(FILE *, FILE *, unsigned char);
+void CleanupString(char text[], unsigned char);
 void ToLowerCase( char *text);
 float getnumber(char *strpntbegin);
 int loc_getline( char s[], int lim, FILE *fp);
@@ -51,26 +51,36 @@ struct Vect *VectorAlloc(void);
 char *VddNet = NULL;
 char *GndNet = NULL;
 
+/* Define option flags */
+
+#define	IMPLICIT_POWER	(unsigned char)0x01
+#define	MAINTAIN_CASE	(unsigned char)0x02
+#define	BIT_BLAST	(unsigned char)0x04
+
 int main ( int argc, char *argv[])
 {
 	FILE *NET1 = NULL, *NET2, *OUT;
 	struct Resistor *ResistorData;
-	int i,AllMatched,NetsEqual,ImplicitPower,MaintainCase;
+	int i, AllMatched, NetsEqual;
+	unsigned char Flags;
 
 	char *Net1name = NULL;
 
 	VddNet = strdup("VDD");
 	GndNet = strdup("VSS");
 	
-	ImplicitPower=TRUE;
-	MaintainCase=FALSE;
-        while( (i = getopt( argc, argv, "pchHv:g:" )) != EOF ) {
+	Flags = (unsigned char)IMPLICIT_POWER;
+
+        while( (i = getopt( argc, argv, "pbchHv:g:" )) != EOF ) {
 	   switch( i ) {
 	   case 'p':
-	       ImplicitPower=FALSE;
+	       Flags &= ~IMPLICIT_POWER;
+	       break;
+	   case 'b':
+	       Flags |= BIT_BLAST;
 	       break;
 	   case 'c':
-	       MaintainCase=TRUE;
+	       Flags |= MAINTAIN_CASE;
 	       break;
 	   case 'h':
 	   case 'H':
@@ -79,10 +89,12 @@ int main ( int argc, char *argv[])
 	   case 'v':
 	       free(VddNet);
 	       VddNet = strdup(optarg);
+	       CleanupString(VddNet, Flags);
 	       break;
 	   case 'g':
 	       free(GndNet);
 	       GndNet = strdup(optarg);
+	       CleanupString(GndNet, Flags);
 	       break;
 	   default:
 	       fprintf(stderr,"\nbad switch %d\n", i );
@@ -107,7 +119,7 @@ int main ( int argc, char *argv[])
 		exit(EXIT_FAILURE);
 	}
 	OUT=stdout;
-	ReadNetlistAndConvert(NET1,OUT,ImplicitPower,MaintainCase);
+	ReadNetlistAndConvert(NET1, OUT, Flags);
         return 0;
 
 
@@ -128,7 +140,7 @@ struct GateList {
         RETURNS: 1 to OS
    SIDE EFFECTS: 
 \*--------------------------------------------------------------*/
-void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int MaintainCase)
+void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 {
 	struct Vect *Vector, *VectorPresent;
 	struct GateList *glist;
@@ -169,9 +181,9 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 	   while (isspace(*lptr)) lptr++;
 	   if (strstr(lptr, ".model") != NULL) {
               if (sscanf(lptr, ".model %s", MainSubcktName) == 1) {
-	         CleanupString(MainSubcktName);
+	         CleanupString(MainSubcktName, Flags);
 	         fprintf(OUT, "module %s (", MainSubcktName);
-	         if (ImplicitPower) fprintf(OUT, " %s, %s, ", GndNet, VddNet); 
+	         if (Flags & IMPLICIT_POWER) fprintf(OUT, " %s, %s, ", GndNet, VddNet); 
 	      }
 	   }
 	   if (strstr(lptr, ".inputs") != NULL) {
@@ -182,9 +194,9 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 	      while (1) {
                  if (sscanf(lptr, "%s", InputName) == 1) {
 	            PrintIt = TRUE;
-	            CleanupString(InputName);
+	            CleanupString(InputName, Flags);
 		    InputNodes[NumberOfInputs] = strdup(InputName);
-	            if ((Weirdpnt = strchr(InputName,'[')) != NULL) {
+	            if (!(Flags & BIT_BLAST) && (Weirdpnt = strchr(InputName,'[')) != NULL) {
 	               PrintIt = FALSE;
 	               VectorIndex = ParseNumber(Weirdpnt); // This one needs to cut off [..]
 	               VectorPresent = Vector;
@@ -244,9 +256,9 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 	      while (1) {
                  if (sscanf(lptr, "%s", OutputName) == 1) {
 	            PrintIt = TRUE;
-	            CleanupString(OutputName);
+	            CleanupString(OutputName, Flags);
 		    OutputNodes[NumberOfOutputs] = strdup(OutputName);
-	            if ((Weirdpnt = strchr(OutputName,'[')) != NULL) {
+	            if (!(Flags & BIT_BLAST) && (Weirdpnt = strchr(OutputName,'[')) != NULL) {
 	               PrintIt = FALSE;
 	               VectorIndex = ParseNumber(Weirdpnt);	// This one needs to cut off [..]
 	               VectorPresent = Vector;
@@ -298,7 +310,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 		 else break;
 	      }
 	      fprintf(OUT,");\n\n");
-	      if (ImplicitPower)
+	      if (Flags & IMPLICIT_POWER)
 		  fprintf(OUT, "input %s, %s;\n", GndNet, VddNet);
 
 	      if (allinputs) fprintf(OUT, "%s", allinputs);
@@ -314,7 +326,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 	         VectorPresent = VectorPresent->next;
 	      }
 	      fprintf(OUT, "\n");
-	      if (!ImplicitPower) {
+	      if (!(Flags & IMPLICIT_POWER)) {
 		 fprintf(OUT, "wire %s = 1'b1;\n", VddNet);
 		 fprintf(OUT, "wire %s = 1'b0;\n", GndNet);
 		 fprintf(OUT, "\n");
@@ -325,9 +337,9 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
            }
 	   if (strstr(lptr,".gate") != NULL || strstr(lptr, ".subckt") != NULL) {
 	      if (sscanf(lptr, ".%*s %s", InstanceName) == 1) {
-	         CleanupString(InstanceName);
+	         CleanupString(InstanceName, Flags);
 
-	         if (!MaintainCase) ToLowerCase(InstanceName);
+	         if (!(Flags & MAINTAIN_CASE)) ToLowerCase(InstanceName);
 
 		 for (gl = glist; gl; gl = gl->next) {
 		    if (!strcmp(gl->gatename, InstanceName)) {
@@ -345,7 +357,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 
 	         fprintf(OUT, "%s %s_%d ( ", gl->gatename, gl->gatename, gl->gatecount);
 	         First = TRUE;
-	         if (ImplicitPower) fprintf(OUT, ".%s(%s), .%s(%s), ",
+	         if (Flags & IMPLICIT_POWER) fprintf(OUT, ".%s(%s), .%s(%s), ",
 			GndNet, GndNet, VddNet, VddNet); 
 		
 	         while (!isspace(*lptr)) lptr++;
@@ -360,8 +372,8 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, int ImplicitPower, int Main
 	            if (sscanf(lptr, "%s", InstancePortName) != 1) break;
 		    lptr = eptr + 1;
 	            if (sscanf(lptr, "%s", InstancePortWire) != 1) break;
-	            CleanupString(InstancePortName);
-	            CleanupString(InstancePortWire);
+	            CleanupString(InstancePortName, Flags);
+	            CleanupString(InstancePortWire, Flags);
 
 	            ItIsAnInput = FALSE;
 	            ItIsAnOutput = FALSE;
@@ -445,7 +457,7 @@ void ToLowerCase( char *text)
 }
 
 
-void CleanupString(char text[LengthOfNodeName])
+void CleanupString(char text[LengthOfNodeName], unsigned char Flags)
 {
 	int i;
 	char *CitationPnt, *Weirdpnt;
@@ -462,7 +474,8 @@ void CleanupString(char text[LengthOfNodeName])
 
 	// Convert angle brackets to square brackets if they
 	// occur at the end of a name;  otherwise, convert
-	// them to underscores
+	// them to underscores.  In bit-blast mode, always
+	// convert to underscores.
 
 	while ((Weirdpnt = strchr(text,'<')) != NULL) {
 	   char *eptr;
@@ -473,7 +486,7 @@ void CleanupString(char text[LengthOfNodeName])
 	      *Weirdpnt = '_';
 	   }
 	   else {
-	      if (*(eptr + 1) == '\0') {
+	      if (!(Flags & BIT_BLAST) && (*(eptr + 1) == '\0')) {
 		 *Weirdpnt = '[';
 		 *eptr = ']';
 	      }
@@ -490,6 +503,12 @@ void CleanupString(char text[LengthOfNodeName])
 	   *Weirdpnt='_';
 	while ((Weirdpnt=strchr(text,':')) != NULL)
 	   *Weirdpnt='_';
+
+	// Remove trailing "!" from global names
+
+	if ((Weirdpnt=strrchr(text,'!')) != NULL)
+	   if (*(Weirdpnt + 1) == '\0')
+	      *Weirdpnt='\0';
 }
 
 
