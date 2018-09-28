@@ -109,8 +109,8 @@ if [catch {open $defname w} fdef] {
    return
 }
 
-if [catch {open $obsname w} fobs] {
-   puts stderr "Error: can't open file $obsname for output"
+if [catch {open $obsname a} fobs] {
+   puts stderr "Error: can't open file $obsname for appending output"
    return
 }
 

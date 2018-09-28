@@ -117,8 +117,8 @@ while {[gets $fdef line] >= 0} {
       # puts stdout "Done with NETS section, dict size is [dict size $nets]"
    } elseif [regexp {[ \t]*PINS[ \t]+([^ \t]+)} $line lmatch pinnum] {
       skip_section $fdef PINS
-   } elseif [regexp {[ \t]*VIAS[ \t]+(.+)[ \t]*$} $line lmatch sitename] {
-      skip_section $fdef $sitename
+   } elseif [regexp {[ \t]*VIAS[ \t]+(.+)[ \t]*$} $line lmatch number] {
+      skip_section $fdef VIAS
    } elseif [regexp {[ \t]*END[ \t]+DESIGN[ \t]*$} $line lmatch] {
       break
    } elseif [regexp {^[ \t]*#} $line lmatch] {

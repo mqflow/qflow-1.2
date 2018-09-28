@@ -445,6 +445,9 @@ endif
 # Remove blockage hardcells defined in .cel1
 #---------------------------------------------------
 
+# Remove any existing .obs file as place2def.tcl will append to it.
+rm ${rootname}.obs
+
 if ( (-f ${rootname}.cel1) && (-f ${scriptdir}/removeblocks.tcl) ) then
 
       echo "Running removeblocks to remove partical blockage references" \

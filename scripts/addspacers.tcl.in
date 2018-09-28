@@ -52,6 +52,7 @@ set pitchx 0
 set layers {}
 set vias {}
 set viarules {}
+set obslist {}
 
 while true {
     set arg0 [lindex $argv $argidx]
@@ -751,7 +752,7 @@ proc get_inputpin {macroname} {
 
 proc write_special {stripeinfo stripefills stripewidth stripepattern
 		rows dieylow dieyhigh fanno} {
-    global fmin vias viarules layers pitchx
+    global fmin vias viarules layers pitchx obslist
 
     # Take 1st fill cell and find name of power and ground buses
     set fillmacro [lindex $stripefills 0]
@@ -1013,6 +1014,22 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set vh [lindex $viaheights $i]
 		    set ovh [expr int($vh)]
 
+		    # If post is in an obstruction area, then skip it.
+		    set dopost true
+		    foreach obs $obslist {
+		       set obsllx [lindex $obs 0]
+		       set obslly [lindex $obs 1]
+		       set obsurx [lindex $obs 2]
+		       set obsury [lindex $obs 3]
+		       if {$smean > $obsllx && $smean < $obsurx &&
+				$ry > $obslly && $ry < $obsury} {
+			  set dopost false
+			  puts stdout "No post here!"
+			  break
+		       }
+		    }
+		    if {!$dopost} {continue}
+
 		    if $first {
 		        puts -nonewline $fanno "+ ROUTED "
 		        set first false
@@ -1115,6 +1132,21 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    set viarule [lindex $baseviarules $i]
 		    set vh [lindex $viaheights $i]
 		    set ovh [expr int($vh)]
+
+		    # If post is in an obstruction area, then skip it.
+		    set dopost true
+		    foreach obs $obslist {
+		       set obsllx [lindex $obs 0]
+		       set obslly [lindex $obs 1]
+		       set obsurx [lindex $obs 2]
+		       set obsury [lindex $obs 3]
+		       if {$smean > $obsllx && $smean < $obsurx &&
+				$ry > $obslly && $ry < $obsury} {
+			  set dopost false
+			  break
+		       }
+		    }
+		    if {!$dopost} {continue}
 
 		    if $first {
 		    	puts -nonewline $fanno "+ ROUTED "
@@ -1561,6 +1593,88 @@ if {$dostretch == false} {
     }
 }
 
+#-----------------------------------------------------------------
+# If there is a ${topname}.obs file, read it in and adjust the
+# X values to account for the spacers.  This also records the
+# obstruction areas so the script does not place power posts in
+# them.
+#-----------------------------------------------------------------
+
+if {$dostripes && $dostretch} {
+
+    # Cast values back into microns, which are the units used by the .obs file
+    set gunits [+ $units 0.0]
+    set gwidth [/ $stripewidth $gunits]
+    set gpitch [/ $stripepitch $gunits]
+    set goffset [/ $stripeoffset $gunits]
+
+    if [catch {open ${topname}.obs r} infobs] {
+	# No .obs file, no action needed.
+	puts stdout "No file ${topname}.obs, so no adjustment required."
+	return
+    }
+    if [catch {open ${topname}.obsx w} outfobs] {
+	puts stout "Error:  Cannot open file ${topname}.obsx for writing!"
+	return
+    }
+    puts stdout "Adjusting obstructions for power striping"
+    # puts stdout "numstripes = $numstripes"
+    # puts stdout "stripewidth = $gwidth um"
+    # puts stdout "stripepitch = $gpitch um"
+    # puts stdout "stripeoffset = $goffset um"
+    while {[gets $infobs line] >= 0} {
+	if [regexp {[ \t]*obstruction[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]*$} $line \
+			lmatch xlow ylow xhigh yhigh layer] {
+            # puts stdout "In: $xlow $ylow $xhigh $yhigh $layer"
+	    if {$xlow > $goffset} {
+		set ns [expr int(($xlow - $goffset + $gpitch) / $gpitch)]
+		if {$ns > $numstripes} {set ns $numstripes}
+		set nw [* $ns $gwidth]
+		set xlow [+ $xlow $nw]
+		# puts stdout "xlow adjust ns = $ns nw = $nw"
+	    } 
+	    if {$xhigh > $goffset} {
+		set ns [expr int(($xhigh - $goffset + $gpitch) / $gpitch)]
+		if {$ns > $numstripes} {set ns $numstripes}
+		set nw [* $ns $gwidth]
+		set xhigh [+ $xhigh $nw]
+		# puts stdout "xhigh adjust ns = $ns nw = $nw"
+	    }
+            # Ensure numerical precision matches DEF file units
+	    set xlow [expr round($xlow * $gunits) / $gunits]
+	    set xhigh [expr round($xhigh * $gunits) / $gunits]
+            # puts stdout "Out: $xlow $ylow $xhigh $yhigh $layer"
+	    puts $outfobs "obstruction $xlow $ylow $xhigh $yhigh $layer"
+	    # obslist shows where to NOT put power posts.  It is layer independent.
+	    lappend obslist [list $xlow $ylow $xhigh $yhigh]
+	} else {
+	    puts $outfobs $outline
+	}
+    }
+    close $outfobs
+    close $infobs
+}
+
+# Convert obslist to DEF units and remove redundant entries
+set newlist {}
+set obslast {}
+foreach obs $obslist {
+    set xlow [lindex $obs 0]
+    set ylow [lindex $obs 1]
+    set xhigh [lindex $obs 2]
+    set yhigh [lindex $obs 3]
+    if {($xlow != [lindex $obslast 0]) || ($ylow != [lindex $obslist 1]) ||
+		($xhigh == [lindex $obslast 2]) || ($yhigh != [lindex $obslist 3])} {
+	set xlow [expr $xlow * $units]
+	set ylow [expr $ylow * $units]
+	set xhigh [expr $xhigh * $units]
+	set yhigh [expr $yhigh * $units]
+	lappend newlist [list $xlow $ylow $xhigh $yhigh]
+        set obslast $obs
+    }
+}
+set obslist $newlist
+
 set newinstlist {}
 
 while {[gets $fdef line] >= 0} {
@@ -1850,64 +1964,6 @@ close $fanno
 close $fdef
 if {$techlef != ""} {
     close $ftech
-}
-
-#-----------------------------------------------------------------
-# If there is a ${topname}.obs file, read it in and adjust the
-# X values to account for the spacers.
-#-----------------------------------------------------------------
-
-if {$dostripes && $dostretch} {
-
-    # Cast values back into microns, which are the units used by the .obs file
-    set gunits [+ $units 0.0]
-    set stripewidth [/ $stripewidth $gunits]
-    set stripepitch [/ $stripepitch $gunits]
-    set stripeoffset [/ $stripeoffset $gunits]
-
-    if [catch {open ${topname}.obs r} infobs] {
-	# No .obs file, no action needed.
-	puts stdout "No file ${topname}.obs, so no adjustment required."
-	return
-    }
-    if [catch {open ${topname}.obsx w} outfobs] {
-	puts stout "Error:  Cannot open file ${topname}.obsx for writing!"
-	return
-    }
-    puts stdout "Adjusting obstructions for power striping"
-    # puts stdout "numstripes = $numstripes"
-    # puts stdout "stripewidth = $stripewidth um"
-    # puts stdout "stripepitch = $stripepitch um"
-    # puts stdout "stripeoffset = $stripeoffset um"
-    while {[gets $infobs line] >= 0} {
-	if [regexp {[ \t]*obstruction[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]*$} $line \
-			lmatch xlow ylow xhigh yhigh layer] {
-            # puts stdout "In: $xlow $ylow $xhigh $yhigh $layer"
-	    if {$xlow > $stripeoffset} {
-		set ns [expr int(($xlow - $stripeoffset + $stripepitch) / $stripepitch)]
-		if {$ns > $numstripes} {set ns $numstripes}
-		set nw [* $ns $stripewidth]
-		set xlow [+ $xlow $nw]
-		# puts stdout "xlow adjust ns = $ns nw = $nw"
-	    } 
-	    if {$xhigh > $stripeoffset} {
-		set ns [expr int(($xhigh - $stripeoffset + $stripepitch) / $stripepitch)]
-		if {$ns > $numstripes} {set ns $numstripes}
-		set nw [* $ns $stripewidth]
-		set xhigh [+ $xhigh $nw]
-		# puts stdout "xhigh adjust ns = $ns nw = $nw"
-	    }
-            # Ensure numerical precision matches DEF file units
-	    set xlow [expr round($xlow * $gunits) / $gunits]
-	    set xhigh [expr round($xhigh * $gunits) / $gunits]
-            # puts stdout "Out: $xlow $ylow $xhigh $yhigh $layer"
-	    puts $outfobs "obstruction $xlow $ylow $xhigh $yhigh $layer"
-	} else {
-	    puts $outfobs $outline
-	}
-    }
-    close $outfobs
-    close $infobs
 }
 
 # Output the list of new instances added.  The file will have already
