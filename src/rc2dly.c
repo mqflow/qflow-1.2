@@ -76,7 +76,7 @@ typedef struct _ritem {
 
 typedef struct _node {
     char*       name;
-    char	mapped[10];
+    char	mapped[12];
     int         type;
     ritemptr    rlist;
     ritemptr    rlist_end;	/* To avoid having to find the list end */
@@ -846,9 +846,9 @@ int main (int argc, char* argv[]) {
                         currnode = create_node(tokens[2], SRC, 0);
 			// If driver name is a pin then the name ID is the net name ID
 			if (!strncmp(tokens[2], "PIN/", 4))
-			    sprintf(currnode->mapped, "*%d", net_idx);
+			    sprintf(currnode->mapped, "*%10d", net_idx);
 			else
-			    sprintf(currnode->mapped, "*%d", nid++);
+			    sprintf(currnode->mapped, "*%10d", nid++);
 
                         if (verbose > 1) print_node(currnode);
 
@@ -872,7 +872,7 @@ int main (int argc, char* argv[]) {
                     }
                     // create the new node
                     currnode = create_node(name, INT, atof(tokens[t+2]));
-		    sprintf(currnode->mapped, "%d_%d", net_idx, nodeNum);
+		    sprintf(currnode->mapped, "%6d_%4d", net_idx, nodeNum);
                     nodeNum++;
 
                     if (verbose > 1) {
@@ -944,9 +944,9 @@ int main (int argc, char* argv[]) {
                     currnode = create_node(name, SNK, 0);
 		    // If driver name is a pin then the name ID is the net name ID
 		    if (!strncmp(tokens[t], "PIN/", 4))
-			sprintf(currnode->mapped, "*%d", net_idx);
+			sprintf(currnode->mapped, "*%10d", net_idx);
 		    else
-			sprintf(currnode->mapped, "*%d", nid++);
+			sprintf(currnode->mapped, "*%10d", nid++);
 
                     if (verbose > 1) print_node(currnode);
                     name = calloc(1, sizeof(char) * (strlen(tokens[0]) + 10));
