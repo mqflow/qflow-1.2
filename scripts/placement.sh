@@ -817,7 +817,7 @@ if ($makedef == 1) then
       ${bindir}/blif2Verilog -c -p -v ${vddnet} -g ${gndnet} \
 		${rootname}_anno.blif > ${rootname}.rtlnopwr.v
 
-      ${bindir}/blif2Verilog -c -b -p -v ${vddnet} -g ${gndnet} \
+      ${bindir}/blif2Verilog -c -b -p -n -v ${vddnet} -g ${gndnet} \
 		${rootname}_anno.blif > ${rootname}.rtlbb.v
 
       echo "Running blif2BSpice." |& tee -a ${synthlog}

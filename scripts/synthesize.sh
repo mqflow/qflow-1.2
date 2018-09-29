@@ -872,7 +872,7 @@ ${bindir}/blif2Verilog -c -p -v ${vddnet} -g ${gndnet} ${modulename}.blif \
 	> ${modulename}.rtlnopwr.v
 
 # Version without vectors
-${bindir}/blif2Verilog -c -p -b -v ${vddnet} -g ${gndnet} ${modulename}.blif \
+${bindir}/blif2Verilog -c -p -b -n -v ${vddnet} -g ${gndnet} ${modulename}.blif \
 	> ${modulename}.rtlbb.v
 
 #---------------------------------------------------------------------

@@ -56,6 +56,7 @@ char *GndNet = NULL;
 #define	IMPLICIT_POWER	(unsigned char)0x01
 #define	MAINTAIN_CASE	(unsigned char)0x02
 #define	BIT_BLAST	(unsigned char)0x04
+#define	NONAME_POWER	(unsigned char)0x08
 
 int main ( int argc, char *argv[])
 {
@@ -66,12 +67,12 @@ int main ( int argc, char *argv[])
 
 	char *Net1name = NULL;
 
-	VddNet = strdup("VDD");
-	GndNet = strdup("VSS");
-	
 	Flags = (unsigned char)IMPLICIT_POWER;
 
-        while( (i = getopt( argc, argv, "pbchHv:g:" )) != EOF ) {
+	VddNet = strdup("VDD");
+	GndNet = strdup("VSS");
+
+        while( (i = getopt( argc, argv, "pbchnHv:g:" )) != EOF ) {
 	   switch( i ) {
 	   case 'p':
 	       Flags &= ~IMPLICIT_POWER;
@@ -81,6 +82,9 @@ int main ( int argc, char *argv[])
 	       break;
 	   case 'c':
 	       Flags |= MAINTAIN_CASE;
+	       break;
+	   case 'n':
+	       Flags |= NONAME_POWER;
 	       break;
 	   case 'h':
 	   case 'H':
@@ -147,6 +151,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 	struct GateList *gl;
 	int i, Found, NumberOfInputs, NumberOfOutputs;
 	int First, VectorIndex, ItIsAnInput, ItIsAnOutput, PrintIt;
+	char *GndVal, *VddVal;
 
         char line[LengthOfLine];
 
@@ -162,6 +167,15 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 	char InstancePortName[LengthOfNodeName];
 	char InstancePortWire[LengthOfNodeName];
 	char dum[LengthOfNodeName];
+
+	if (Flags & NONAME_POWER) {
+	   VddVal = "1'b1";
+	   GndVal = "1'b0";
+	}
+	else {
+	   VddVal = VddNet;
+	   GndVal = GndNet;
+	}
 
 	glist = NULL;
 
@@ -326,7 +340,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 	         VectorPresent = VectorPresent->next;
 	      }
 	      fprintf(OUT, "\n");
-	      if (!(Flags & IMPLICIT_POWER)) {
+	      if (!(Flags & IMPLICIT_POWER) && !(Flags & NONAME_POWER)) {
 		 fprintf(OUT, "wire %s = 1'b1;\n", VddNet);
 		 fprintf(OUT, "wire %s = 1'b0;\n", GndNet);
 		 fprintf(OUT, "\n");
@@ -358,7 +372,7 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 	         fprintf(OUT, "%s %s_%d ( ", gl->gatename, gl->gatename, gl->gatecount);
 	         First = TRUE;
 	         if (Flags & IMPLICIT_POWER) fprintf(OUT, ".%s(%s), .%s(%s), ",
-			GndNet, GndNet, VddNet, VddNet); 
+			GndNet, GndVal, VddNet, VddVal); 
 		
 	         while (!isspace(*lptr)) lptr++;
 	         while (isspace(*lptr)) lptr++;
@@ -411,6 +425,12 @@ void ReadNetlistAndConvert(FILE *NETFILE, FILE *OUT, unsigned char Flags)
 	               strcat(dum, InstancePortWire);
 	               strcpy(InstancePortWire, dum);
 	            }
+		    if (Flags & NONAME_POWER) {
+			if (!strcmp(InstancePortWire, VddNet))
+			    strcpy(InstancePortWire, VddVal);
+			else if (!strcmp(InstancePortWire, GndNet))
+			    strcpy(InstancePortWire, GndVal);
+		    }
 	            if (First) {
 	               fprintf(OUT, ".%s(%s)", InstancePortName, InstancePortWire);
 	               First = FALSE;
