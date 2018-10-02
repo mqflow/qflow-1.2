@@ -97,6 +97,7 @@ while ($#argv > 0)
 	 breaksw
       case sta:
       case vesta:
+      case opentimer:
 	 set dosta=1
 	 set actions=1
 	 shift
@@ -557,10 +558,19 @@ if ( ! -f ${userfile} ) then
    echo \# Minimum period of the clock use \"--period value\" \(value in ps\) \
 	>> ${userfile}
 
-   if ( ${?vesta_options} ) then
-      echo \# set vesta_options = \"${vesta_options}\" >> ${userfile}
+   if ( HAVE_OPENTIMER ) then
+      if ( ${?opentimer_options} ) then
+         echo \# set opentimer_options = \"${opentimer_options}\" >> ${userfile}
+      else
+         echo \# set opentimer_options = >> ${userfile}
+      endif
    else
-      echo \# set vesta_options = >> ${userfile}
+
+      if ( ${?vesta_options} ) then
+         echo \# set vesta_options = \"${vesta_options}\" >> ${userfile}
+      else
+         echo \# set vesta_options = >> ${userfile}
+      endif
    endif
 
    echo "" >> ${userfile}
@@ -587,7 +597,11 @@ echo "${scriptdir}/placement.sh -d ${projectpath} ${modulename} || exit 1" >> ${
 if ($dosta == 0) then
    echo -n "# " >> ${execfile}
 endif
-echo "${scriptdir}/vesta.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+if (HAVE_OPENTIMER) then
+    echo "${scriptdir}/opentimer.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+else
+    echo "${scriptdir}/vesta.sh ${projectpath} ${modulename} || exit 1" >> ${execfile}
+endif
 
 if ($doroute == 0) then
    echo -n "# " >> ${execfile}
@@ -597,7 +611,12 @@ echo "${scriptdir}/router.sh ${projectpath} ${modulename} || exit 1" >> ${execfi
 if ($dobackanno == 0) then
    echo -n "# " >> ${execfile}
 endif
-echo "${scriptdir}/vesta.sh -d ${projectpath} ${modulename} || exit 1" >> ${execfile}
+if (HAVE_OPENTIMER) then
+    echo "${scriptdir}/opentimer.sh -d ${projectpath} ${modulename} \
+		|| exit 1" >> ${execfile}
+else
+    echo "${scriptdir}/vesta.sh -d ${projectpath} ${modulename} || exit 1" >> ${execfile}
+endif
 
 if ($domigrate == 0) then
    echo -n "# " >> ${execfile}

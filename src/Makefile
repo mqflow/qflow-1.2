@@ -8,7 +8,7 @@ LIBS =
 LDFLAGS = 
 INSTALL = /bin/install -c
 
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\" -DQFLOW_VERSION=\"1.2\" -DQFLOW_REVISION=\"74\"
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\" -DQFLOW_OPENTIMER_PATH=\"\" -DQFLOW_VERSION=\"1.2\" -DQFLOW_REVISION=\"75\"
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_GRAYWOLF_PATH = /usr/local/bin/graywolf
@@ -18,12 +18,14 @@ QFLOW_ODIN_PATH = @QFLOW_ODIN_PATH@
 QFLOW_MAGIC_PATH = /usr/local/bin/magic
 QFLOW_NETGEN_PATH = /usr/local/bin/netgen
 QFLOW_YOSYS_PATH = /usr/local/bin/yosys
+QFLOW_OPENTIMER_PATH = 
 
 HAVE_ABC = @HAVE_ABC@
 HAVE_YOSYS = 1
 HAVE_ODIN_II = @HAVE_ODIN_II@
 HAVE_MAGIC = 1
 HAVE_NETGEN = 1
+HAVE_OPENTIMER = 0
 
 OBJECTS = blif2BSpice.o blif2Verilog.o blifFanout.o vesta.o spice2delay.o rc2dly.o
 HASHLIB = hash.o
@@ -76,6 +78,9 @@ install: $(TARGETS)
 	@if test "${HAVE_YOSYS}" = "1"; then \
 	(cd $(DESTDIR)${BININSTALL};  $(RM) -f yosys;  ln -s $(QFLOW_YOSYS_PATH) yosys); \
 	(cd $(DESTDIR)${BININSTALL};  $(RM) -f yosys-abc;  ln -s $(QFLOW_YOSYS_PATH)-abc yosys-abc); \
+	fi
+	@if test "${HAVE_OPENTIMER}" = "1"; then \
+	(cd $(DESTDIR)${BININSTALL};  $(RM) -f ot-shell;  ln -s $(QFLOW_OPENTIMER_PATH)/ot-shell ot-shell); \
 	fi
 
 uninstall:

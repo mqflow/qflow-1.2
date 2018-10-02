@@ -542,6 +542,17 @@ class QflowManager(ttk.Frame):
         window.title = ttk.Label(window, text = 'DRC Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
 
+        window.swap = ttk.Frame(window)
+        window.swap.pack(side = 'top', fill = 'x')
+        window.swap.title = ttk.Label(window.swap, style = 'normal.TLabel',
+		text = 'Run LVS before DRC:')
+        window.swap.title.pack(side = 'left')
+        self.drc_swap = tkinter.IntVar(window.swap)
+        self.drc_swap.set(0)
+        window.swap.check = ttk.Checkbutton(window.swap, variable = self.drc_swap,
+		command = self.qflow_swap_drc_lvs)
+        window.swap.check.pack(side = 'left')
+
         window.stop = ttk.Frame(window)
         window.stop.pack(side = 'top', fill = 'x')
         window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
@@ -562,6 +573,7 @@ class QflowManager(ttk.Frame):
         window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
 		text = 'Stop flow after LVS success:')
         window.stop.title.pack(side = 'left')
+
         self.lvs_stop = tkinter.IntVar(window.stop)
         self.lvs_stop.set(0)
         window.stop.check = ttk.Checkbutton(window.stop, variable = self.lvs_stop)
@@ -572,6 +584,14 @@ class QflowManager(ttk.Frame):
         window.title = ttk.Label(window, text = 'GDS Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
 
+        window.gdsview = ttk.Frame(window)
+        window.gdsview.pack(side = 'top', fill = 'x')
+        window.gdsview.title = ttk.Label(window.gdsview, style = 'normal.TLabel',
+		text = 'Use GDS view of standard cells:')
+        window.gdsview.title.pack(side = 'left')
+        self.gdsview = tkinter.BooleanVar(window.gdsview)
+        self.gdsview.set(0)
+
         window.stop = ttk.Frame(window)
         window.stop.pack(side = 'top', fill = 'x')
         window.stop.title = ttk.Label(window.stop, style = 'normal.TLabel',
@@ -581,14 +601,6 @@ class QflowManager(ttk.Frame):
         self.gds_stop.set(0)
         window.stop.check = ttk.Checkbutton(window.stop, variable = self.gds_stop)
         window.stop.check.pack(side = 'left')
-
-        window.gdsview = ttk.Frame(window)
-        window.gdsview.pack(side = 'top', fill = 'x')
-        window.gdsview.title = ttk.Label(window.gdsview, style = 'normal.TLabel',
-		text = 'Use GDS view of standard cells:')
-        window.gdsview.title.pack(side = 'left')
-        self.gdsview = tkinter.BooleanVar(window.gdsview)
-        self.gdsview.set(0)
 
         window.gdsview.check = ttk.Checkbutton(window.gdsview, variable = self.gdsview)
         window.gdsview.check.pack(side = 'left')
@@ -1082,6 +1094,36 @@ class QflowManager(ttk.Frame):
         # Remove the load.magrc file
         # os.remove(ldir + '/qflow.magicrc')
 
+    # Modify the GUI to run LVS before DRC (visual only;  keeps the checklist
+    # from running out-of-order).
+
+    def qflow_swap_drc_lvs(self):
+        swapstate = self.drc_swap.get()
+        if swapstate == 0:
+            # DRC before LVS
+            self.toppane.checklist.drc.grid(column = 0, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_result.grid(column = 1, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_run.grid(column = 2, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_settings.grid(column = 3, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.lvs.grid(column = 0, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.lvs_result.grid(column = 1, row = 9, ipadx = 2, padx = 2)
+            self.toppane.checklist.lvs_run.grid(column = 2, row = 9, ipadx = 2, padx = 2)
+            self.toppane.checklist.lvs_settings.grid(column = 3, row = 9, ipadx = 2, padx = 2)
+        else:
+            # LVS before DRC
+            self.toppane.checklist.lvs.grid(column = 0, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.lvs_result.grid(column = 1, row = 8, ipadx = 2, padx = 2)
+            self.toppane.checklist.lvs_run.grid(column = 2, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.lvs_settings.grid(column = 3, row = 8, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc.grid(column = 0, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_result.grid(column = 1, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_run.grid(column = 2, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
+            self.toppane.checklist.drc_settings.grid(column = 3, row = 9, ipadx = 2, padx = 2, sticky = 'nsw')
+        # Now get the status again. . . 
+        self.qflow_get_status()
+        # And set the GUI again. . .
+        self.gui_set_status()
+	
     # Set the GUI according to self.status
 
     def gui_set_status(self):
@@ -1112,7 +1154,10 @@ class QflowManager(ttk.Frame):
             # There is no status, so get one
             self.qflow_get_status()
 
-        stages = ['begin', 'prep', 'synth', 'place', 'timing', 'route', 'backanno', 'migrate', 'drc', 'lvs', 'gds', 'clean', 'done']
+        if self.drc_swap.get() == 0:
+            stages = ['begin', 'prep', 'synth', 'place', 'timing', 'route', 'backanno', 'migrate', 'drc', 'lvs', 'gds', 'clean', 'done']
+        else:
+            stages = ['begin', 'prep', 'synth', 'place', 'timing', 'route', 'backanno', 'migrate', 'lvs', 'drc', 'gds', 'clean', 'done']
 
         try:
             stage = stages.index(status) - 1
@@ -1182,25 +1227,45 @@ class QflowManager(ttk.Frame):
             result = pftext if stage == 6 else "(not done)"
             style = pfstyle if stage == 6 else "normal.TButton"
             self.toppane.checklist.migrate_result.configure(text=result, style=style)
-            self.toppane.checklist.drc_run.config(state = 'disabled')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.drc_run.config(state = 'disabled')
+            else:
+                self.toppane.checklist.lvs_run.config(state = 'disabled')
         else:
             self.toppane.checklist.migrate_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.drc_run.config(state = 'enabled', text = 'Run')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.drc_run.config(state = 'enabled', text = 'Run')
+            else:
+                self.toppane.checklist.lvs_run.config(state = 'enabled', text = 'Run')
         if stage <= 7:
             result = pftext if stage == 7 else "(not done)"
             style = pfstyle if stage == 7 else "normal.TButton"
-            self.toppane.checklist.drc_result.configure(text=result, style=style)
-            self.toppane.checklist.lvs_run.config(state = 'disabled')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.drc_result.configure(text=result, style=style)
+                self.toppane.checklist.lvs_run.config(state = 'disabled')
+            else:
+                self.toppane.checklist.lvs_result.configure(text=result, style=style)
+                self.toppane.checklist.drc_run.config(state = 'disabled')
         else:
-            self.toppane.checklist.drc_result.configure(text='Okay', style='green.TButton')
-            self.toppane.checklist.lvs_run.config(state = 'enabled', text = 'Run')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.drc_result.configure(text='Okay', style='green.TButton')
+                self.toppane.checklist.lvs_run.config(state = 'enabled', text = 'Run')
+            else:
+                self.toppane.checklist.lvs_result.configure(text='Okay', style='green.TButton')
+                self.toppane.checklist.drc_run.config(state = 'enabled', text = 'Run')
         if stage <= 8:
             result = pftext if stage == 8 else "(not done)"
             style = pfstyle if stage == 8 else "normal.TButton"
-            self.toppane.checklist.lvs_result.configure(text=result, style=style)
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.lvs_result.configure(text=result, style=style)
+            else:
+                self.toppane.checklist.drc_result.configure(text=result, style=style)
             self.toppane.checklist.gds_run.config(state = 'disabled')
         else:
-            self.toppane.checklist.lvs_result.configure(text='Okay', style='green.TButton')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.lvs_result.configure(text='Okay', style='green.TButton')
+            else:
+                self.toppane.checklist.drc_result.configure(text='Okay', style='green.TButton')
             self.toppane.checklist.gds_run.config(state = 'enabled', text = 'Run')
         if stage <= 9:
             result = pftext if stage == 9 else "(not done)"
@@ -1256,15 +1321,29 @@ class QflowManager(ttk.Frame):
         else:
             self.toppane.checklist.migrate_run.config(style = 'normal.TButton')
         if stage == 7:
-            self.replace_settings(self.toppane.settings.drc_settings)
-            self.toppane.checklist.drc_run.config(style = 'bold.TButton', text = 'Run')
+            if self.drc_swap.get() == 0:
+                self.replace_settings(self.toppane.settings.drc_settings)
+                self.toppane.checklist.drc_run.config(style = 'bold.TButton', text = 'Run')
+            else:
+                self.replace_settings(self.toppane.settings.lvs_settings)
+                self.toppane.checklist.lvs_run.config(style = 'bold.TButton', text = 'Run')
         else:
-            self.toppane.checklist.drc_run.config(style = 'normal.TButton')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.drc_run.config(style = 'normal.TButton')
+            else:
+                self.toppane.checklist.lvs_run.config(style = 'normal.TButton')
         if stage == 8:
-            self.replace_settings(self.toppane.settings.lvs_settings)
-            self.toppane.checklist.lvs_run.config(style = 'bold.TButton', text = 'Run')
+            if self.drc_swap.get() == 0:
+                self.replace_settings(self.toppane.settings.lvs_settings)
+                self.toppane.checklist.lvs_run.config(style = 'bold.TButton', text = 'Run')
+            else:
+                self.replace_settings(self.toppane.settings.drc_settings)
+                self.toppane.checklist.drc_run.config(style = 'bold.TButton', text = 'Run')
         else:
-            self.toppane.checklist.lvs_run.config(style = 'normal.TButton')
+            if self.drc_swap.get() == 0:
+                self.toppane.checklist.lvs_run.config(style = 'normal.TButton')
+            else:
+                self.toppane.checklist.drc_run.config(style = 'normal.TButton')
         if stage == 9:
             self.replace_settings(self.toppane.settings.gds_settings)
             self.toppane.checklist.gds_run.config(style = 'bold.TButton', text = 'Run')
@@ -1597,7 +1676,10 @@ class QflowManager(ttk.Frame):
         if os.path.exists(magfile):
             statbuf = os.stat(magfile)
             if statbuf.st_mtime >= stime:
-                self.status = 'drc'
+                if self.drc_swap.get() == 0:
+                    self.status = 'drc'
+                else:
+                    self.status = 'lvs'
                 stime = statbuf.st_mtime
             else:
                 self.print('Status: .mag file predates .def file.')
@@ -1610,60 +1692,116 @@ class QflowManager(ttk.Frame):
             self.status = 'migrate'
             return
 
-        # Step nine: Check for drc results in drc.log file
-        self.print("Step ten.")
-        logfile = self.logdir + '/drc.log'
-        if os.path.exists(logfile):
-            statbuf = os.stat(logfile)
-            if statbuf.st_mtime >= stime:
-                with open(logfile, 'r') as ifile:
-                    for line in ifile:
-                        if 'No DRC errors' in line:
-                            stime = statbuf.st_mtime
-                            self.status = 'lvs'
-                            break
-                        elif 'DRC error count' in line:
-                            self.print('Status: logfile reports ' + line)
-                            self.print('Status set to "drc"')
-                            self.status = 'drc:fail'
-                            return
+        self.print("Step nine.")
+        if self.drc_swap.get() == 0:
+            # Step nine: Check for drc results in drc.log file
+            logfile = self.logdir + '/drc.log'
+            if os.path.exists(logfile):
+                statbuf = os.stat(logfile)
+                if statbuf.st_mtime >= stime:
+                    with open(logfile, 'r') as ifile:
+                        for line in ifile:
+                            if 'No DRC errors' in line:
+                                stime = statbuf.st_mtime
+                                self.status = 'lvs'
+                                break
+                            elif 'DRC error count' in line or 'DRC failure:' in line:
+                                self.print('Status: logfile reports ' + line)
+                                self.print('Status set to "drc"')
+                                self.status = 'drc:fail'
+                                return
+                else:
+                    self.print('Status: drc.log predates comp.json file.')
+                    self.print('Status set to "drc"')
+                    self.status = 'drc'
+                    return
             else:
-                self.print('Status: drc.log predates comp.json file.')
+                self.print('Status: no DRC log file created.')
                 self.print('Status set to "drc"')
                 self.status = 'drc'
                 return
         else:
-            self.print('Status: no DRC log file created.')
-            self.print('Status set to "drc"')
-            self.status = 'drc'
-            return
-
-        # Step ten: Check for comp.json file
-        self.print("Step nine.")
-        compfile = self.layoutdir + '/comp.json'
-        if os.path.exists(compfile):
-            statbuf = os.stat(compfile)
-            if statbuf.st_mtime >= stime:
-                failures = count_LVS_failures(compfile)
-                total = failures[0]
-                if total == 0:
-                    self.status = 'gds'
-                    stime = statbuf.st_mtime
+            # Step nine: Check for comp.json file
+            compfile = self.layoutdir + '/comp.json'
+            if os.path.exists(compfile):
+                statbuf = os.stat(compfile)
+                if statbuf.st_mtime >= stime:
+                    failures = count_LVS_failures(compfile)
+                    total = failures[0]
+                    if total == 0:
+                        self.status = 'gds'
+                        stime = statbuf.st_mtime
+                    else:
+                        self.print('Status: comp.json reports ' + str(total) + ' LVS errors.')
+                        self.print('Status set to "drc"')
+                        self.status = 'lvs:fail'
+                        return
                 else:
-                    self.print('Status: comp.json reports ' + str(total) + ' LVS errors.')
+                    self.print('Status: comp.json file predates .mag file.')
                     self.print('Status set to "lvs"')
-                    self.status = 'lvs:fail'
+                    self.status = 'lvs'
                     return
             else:
-                self.print('Status: comp.json file predates .mag file.')
+                self.print('Status: no comp.json file.')
+                self.print('Status set to "lvs"')
+                self.status = 'lvs'
+                return
+
+
+        self.print("Step ten.")
+        if self.drc_swap.get() == 0:
+            # Step ten: Check for comp.json file
+            compfile = self.layoutdir + '/comp.json'
+            if os.path.exists(compfile):
+                statbuf = os.stat(compfile)
+                if statbuf.st_mtime >= stime:
+                    failures = count_LVS_failures(compfile)
+                    total = failures[0]
+                    if total == 0:
+                        self.status = 'gds'
+                        stime = statbuf.st_mtime
+                    else:
+                        self.print('Status: comp.json reports ' + str(total) + ' LVS errors.')
+                        self.print('Status set to "lvs"')
+                        self.status = 'lvs:fail'
+                        return
+                else:
+                    self.print('Status: comp.json file predates .mag file.')
+                    self.print('Status set to "lvs"')
+                    self.status = 'lvs'
+                    return
+            else:
+                self.print('Status: no comp.json file.')
                 self.print('Status set to "lvs"')
                 self.status = 'lvs'
                 return
         else:
-            self.print('Status: no comp.json file.')
-            self.print('Status set to "lvs"')
-            self.status = 'lvs'
-            return
+            # Step ten: Check for drc results in drc.log file
+            logfile = self.logdir + '/drc.log'
+            if os.path.exists(logfile):
+                statbuf = os.stat(logfile)
+                if statbuf.st_mtime >= stime:
+                    with open(logfile, 'r') as ifile:
+                        for line in ifile:
+                            if 'No DRC errors' in line:
+                                stime = statbuf.st_mtime
+                                self.status = 'gds'
+                                break
+                            elif 'DRC error count' in line or 'DRC failure:' in line:
+                                self.print('Status: logfile reports ' + line)
+                                self.print('Status set to "lvs"')
+                                self.status = 'drc:fail'
+                                return
+                else:
+                    self.print('Status: drc.log predates comp.json file.')
+                    self.print('Status set to "drc"')
+                    self.status = 'drc'
+                    return
+            else:
+                self.print('Status: no DRC log file created.')
+                self.print('Status set to "drc"')
+                self.status = 'drc'
+                return
 
         # Step eleven: Check for project.gds file
         self.print("Step eleven.")
@@ -2415,11 +2553,18 @@ class QflowManager(ttk.Frame):
             self.gui_set_status()
             return
 
-        # Can only run DRC if migration has been run and completed.
-        status = self.toppane.checklist.migrate_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot run DRC check until migration has been run.')
-            return
+        if self.drc_swap.get() == 0:
+            # Can only run DRC if migration has been run and completed.
+            status = self.toppane.checklist.migrate_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run DRC check until migration has been run.')
+                return
+        else:
+            # Can only run DRC if LVS comparison has been run and passed.
+            status = self.toppane.checklist.lvs_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run DRC check until LVS has passed.')
+                return
 
         # Reset all the buttons and status labels below this one
         self.status = 'drc'
@@ -2454,11 +2599,18 @@ class QflowManager(ttk.Frame):
             self.gui_set_status()
             return
 
-        # Can only run LVS comparison if DRC has been run and passed.
-        status = self.toppane.checklist.drc_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot run LVS comparison until DRC has passed.')
-            return
+        if self.drc_swap.get() == 0:
+            # Can only run LVS comparison if DRC has been run and passed.
+            status = self.toppane.checklist.drc_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run LVS comparison until DRC has passed.')
+                return
+        else:
+            # Can only run DRC comparison if migration has been run and passed.
+            status = self.toppane.checklist.migrate_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run LVS comparison until migration is complete.')
+                return
 
         # Reset all the buttons and status labels below this one
         self.status = 'lvs'
@@ -2493,11 +2645,18 @@ class QflowManager(ttk.Frame):
             self.gui_set_status()
             return
 
-        # Can only run GDS generation if LVS has been run and passed.
-        status = self.toppane.checklist.lvs_result.cget('text')
-        if status != 'Okay':
-            self.print('Cannot run GDS generation until LVS comparison has passed.')
-            return
+        if self.drc_swap.get() == 0:
+            # Can only run GDS generation if LVS has been run and passed.
+            status = self.toppane.checklist.lvs_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run GDS generation until LVS comparison has passed.')
+                return
+        else:
+            # Can only run GDS generation if DRC has been run and passed.
+            status = self.toppane.checklist.drc_result.cget('text')
+            if status != 'Okay':
+                self.print('Cannot run GDS generation until DRC comparison has passed.')
+                return
 
         # Reset all the buttons and status labels below this one
         self.status = 'gds'
@@ -2849,6 +3008,10 @@ class QflowManager(ttk.Frame):
                         self.print("STA failed with error condition (see log file).")
                         failed = True
                         break
+                    elif 'Design fails' in line:
+                        self.print("STA failed with error condition (see log file).")
+                        failed = True
+                        break
 
         if failed:
             self.toppane.checklist.timing_result.configure(text="Fail", style='red.TButton')
@@ -2903,6 +3066,10 @@ class QflowManager(ttk.Frame):
                         self.print("Post-route STA failed with error condition (see log file).")
                         failed = True
                         break
+                    elif 'Design fails' in line:
+                        self.print("Post-route STA failed with error condition (see log file).")
+                        failed = True
+                        break
 
         if failed:
             self.toppane.checklist.backanno_result.configure(text="Fail", style='red.TButton')
@@ -2932,11 +3099,18 @@ class QflowManager(ttk.Frame):
         if failed:
             self.toppane.checklist.migrate_result.configure(text="Fail", style='red.TButton')
         else:
-            self.status = 'drc'
+            if self.drc_swap.get() == 0:
+                self.status = 'drc'
+            else:
+                self.status = 'lvs'
             self.gui_set_status()
 
-        if self.status == 'drc' and self.migrate_stop.get() == 0:
-            self.qflow_drc()
+        if self.drc_swap.get() == 0:
+            if self.status == 'drc' and self.migrate_stop.get() == 0:
+                self.qflow_drc()
+        else:
+            if self.status == 'lvs' and self.migrate_stop.get() == 0:
+                self.qflow_lvs()
 
     def done_drc(self, filename, status):
         failed = False
@@ -2957,11 +3131,18 @@ class QflowManager(ttk.Frame):
         if failed:
             self.toppane.checklist.drc_result.configure(text="Fail", style='red.TButton')
         else:
-            self.status = 'lvs'
+            if self.drc_swap.get() == 0:
+                self.status = 'lvs'
+            else:
+                self.status = 'gds'
             self.gui_set_status()
 
-        if self.status == 'lvs' and self.drc_stop.get() == 0:
-            self.qflow_lvs()
+        if self.drc_swap.get() == 0:
+            if self.status == 'lvs' and self.drc_stop.get() == 0:
+                self.qflow_lvs()
+        else:
+            if self.status == 'gds' and self.drc_stop.get() == 0:
+                self.qflow_gds()
 
     def done_lvs(self, filename, status):
         failed = False
@@ -2982,11 +3163,18 @@ class QflowManager(ttk.Frame):
         if failed:
             self.toppane.checklist.lvs_result.configure(text="Fail", style='red.TButton')
         else:
-            self.status = 'gds'
+            if self.drc_swap.get() == 0:
+                self.status = 'gds'
+            else:
+                self.status = 'drc'
             self.gui_set_status()
 
-        if self.status == 'gds' and self.lvs_stop.get() == 0:
-            self.qflow_gds()
+        if self.drc_swap.get() == 0:
+            if self.status == 'gds' and self.lvs_stop.get() == 0:
+                self.qflow_gds()
+        else:
+            if self.status == 'drc' and self.lvs_stop.get() == 0:
+                self.qflow_drc()
 
     def done_gds(self, filename, status):
         failed = False

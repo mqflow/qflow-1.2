@@ -1,12 +1,12 @@
 #!/bin/tcsh -f
 #----------------------------------------------------------
-# Static timing analysis script using vesta
+# Static timing analysis script using OpenTimer
 #----------------------------------------------------------
-# Tim Edwards, 10/29/13, for Open Circuit Design
+# Tim Edwards, 10/02/18, for Open Circuit Design
 #----------------------------------------------------------
 
 if ($#argv < 2) then
-   echo Usage:  vesta.sh [options] <project_path> <source_name>
+   echo Usage:  opentimer.sh [options] <project_path> <source_name>
    exit 1
 endif
 
@@ -21,7 +21,7 @@ if ($argc == 2) then
    set argv1=`echo $cmdargs | cut -d' ' -f1`
    set argv2=`echo $cmdargs | cut -d' ' -f2`
 else
-   echo Usage:  vesta.sh [options] <project_path> <source_name>
+   echo Usage:  opentimer.sh [options] <project_path> <source_name>
    echo   where
    echo       <project_path> is the name of the project directory containing
    echo                 a file called qflow_vars.sh.
@@ -64,8 +64,8 @@ if (-f project_vars.sh) then
    source project_vars.sh
 endif
 
-if (! ${?vesta_options} ) then
-   set vesta_options = ""
+if (! ${?opentimer_options} ) then
+   set opentimer_options = ""
 endif
 
 if (!($?logdir)) then
@@ -100,11 +100,35 @@ if ( ${errcond} == 1 ) then
 endif
 
 # Prepend techdir to libertyfile unless libertyfile begins with "/"
+# Use "libertymax" and "libertymin" for maximum and minimum timing,
+# respectively, unless they don't exist, in which case use "libertyfile"
+# for both.
+
 set abspath=`echo ${libertyfile} | cut -c1`
 if ( "${abspath}" == "/" ) then
    set libertypath=${libertyfile}
+   if ( ${?libertymax} ) then
+       set libertymaxpath=${libertymax}
+   else
+       set libertymaxpath=${libertyfile}
+   endif
+   if ( ${?libertymin} ) then
+       set libertyminpath=${libertymin}
+   else
+       set libertyminpath=${libertyfile}
+   endif
 else
    set libertypath=${techdir}/${libertyfile}
+   if ( ${?libertymax} ) then
+       set libertymaxpath=${techdir}/${libertymax}
+   else
+       set libertymaxpath=${techdir}/${libertyfile}
+   endif
+   if ( ${?libertymin} ) then
+       set libertyminpath=${techdir}/${libertymin}
+   else
+       set libertyminpath=${techdir}/${libertyfile}
+   endif
 endif
 
 #----------------------------------------------------------
@@ -152,28 +176,18 @@ if ($dodelays == 1) then
 	  mv ${synthdir}/${rootname}.spefx ${synthdir}/${rootname}.spef
        endif
 
-       # Run rc2dly again to get SDF format file
-       echo "Converting qrouter output to SDF delay format" |& tee -a ${synthlog}
-       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.sdf" \
-		|& tee -a ${synthlog}
-       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
-		-d ${synthdir}/${rootname}.sdf
-
        cd ${synthdir}
 
-       # Spot check for output file (NOTE:  Currently not checking if SPEF
-       # or SDF format files were created)
-       if ( !( -f ${rootname}.dly || \
-		( -M ${rootname}.dly < -M ${layoutdir}/${rootname}.rc ))) then
-	  echo "rc2dly failure:  No file ${rootname}.dly created." \
+       # Spot check for output file
+       if ( !( -f ${rootname}.spef || \
+		( -M ${rootname}.spef < -M ${layoutdir}/${rootname}.rc ))) then
+	  echo "rc2dly failure:  No file ${rootname}.spef created." \
 		|& tee -a ${synthlog}
           echo "Premature exit." |& tee -a ${synthlog}
           echo "Synthesis flow stopped due to error condition." >> ${synthlog}
           exit 1
        endif
 
-       # Add delay file to vesta options, assuming it exists.
-       set vesta_options = "-c -d ${rootname}.dly ${vesta_options}"
     else
        echo "Error:  No file ${rootname}.rc, cannot back-annotate delays!" \
 		|& tee -a ${synthlog}
@@ -185,18 +199,40 @@ endif
 
 cd ${synthdir}
 
+# Create a shell SDC file if one doesn't exist
+# (This remains to be done and will probably need to be done by a script)
+
+if ( -f ${rootname}.sdc ) then
+else
+   echo "Creating example SDC file for timing" |& tee -a ${synthlog}
+   cat > ${rootname}.sdc << EOF
+create_clock -name clock -period 4000 -waveform {0 2000} [get_ports clock]
+EOF
+
+# Create the input script for OpenTimer
+
+echo "Creating OpenTimer input file ${rootname}.conf" |& tee -a ${synthlog}
+cat > ${rootname}.conf << EOF
+read_celllib -min ${libertyminpath}
+read_celllib -max ${libertymaxpath}
+read_verilog ${rootname}.rtlbb.v
+read_spef ${rootname}.spef
+read_sdc ${rootname}.sdc
+report_timing
+report_wns
+EOF
+
 echo ""
 if ($dodelays == 1) then
-   echo "Running vesta static timing analysis with back-annotated extracted wire delays" \
+   echo "Running OpenTimer static timing analysis with back-annotated extracted wire delays" \
 		|& tee -a ${synthlog}
 else
-   echo "Running vesta static timing analysis" |& tee -a ${synthlog}
+   echo "Running OpenTimer static timing analysis" |& tee -a ${synthlog}
 endif
-echo "vesta ${vesta_options} ${rootname}.rtlnopwr.v ${libertypath}" \
+echo "ot-shell ${opentimer_options} -i ${rootname}.conf"
 		|& tee -a ${synthlog}
 echo ""
-${bindir}/vesta ${vesta_options} ${rootname}.rtlnopwr.v \
-		${libertypath} |& tee -a ${synthlog}
+${bindir}/ot-shell ${opentimer_options} -i ${rootname}.conf |& tee -a ${synthlog}
 echo ""
 
 #------------------------------------------------------------
