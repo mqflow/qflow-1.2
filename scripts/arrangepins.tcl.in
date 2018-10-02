@@ -625,10 +625,12 @@ foreach entry $leftrow {
     if {![catch {set pinbbox [dict get $pinrec bbox]}]} {
 	set pinbot [/ [lindex $pinbbox 1] $leftpitch]
 	set pintop [/ [lindex $pinbbox 3] $leftpitch]
-	lappend newleftrow [concat $entry $pinbot $pintop]
     } else {
-	puts stdout "Warning: pin [lindex $entry 0] has no bounding box, discarding."
+	puts stdout "Warning: pin [lindex $entry 0] has no bounding box."
+	set pinbot [- [/ [dict get $pinrec y] $leftpitch] 1]
+	set pintop [+ [/ [dict get $pinrec y] $leftpitch] 1]
     }
+    lappend newleftrow [concat $entry $pinbot $pintop]
 }
 
 set newrightrow {}
@@ -637,10 +639,12 @@ foreach entry $rightrow {
     if {![catch {set pinbbox [dict get $pinrec bbox]}]} {
 	set pinbot [/ [lindex $pinbbox 1] $rightpitch]
 	set pintop [/ [lindex $pinbbox 3] $rightpitch]
-	lappend newrightrow [concat $entry $pinbot $pintop]
     } else {
-	puts stdout "Warning: pin [lindex $entry 0] has no bounding box, discarding."
+	puts stdout "Warning: pin [lindex $entry 0] has no bounding box."
+	set pinbot [- [/ [dict get $pinrec y] $rightpitch] 1]
+	set pintop [+ [/ [dict get $pinrec y] $rightpitch] 1]
     }
+    lappend newrightrow [concat $entry $pinbot $pintop]
 }
 
 set newtoprow {}
@@ -649,10 +653,12 @@ foreach entry $toprow {
     if {![catch {set pinbbox [dict get $pinrec bbox]}]} {
 	set pinleft [/ [lindex $pinbbox 0] $toppitch]
 	set pinright [/ [lindex $pinbbox 2] $toppitch]
-	lappend newtoprow [concat $entry $pinleft $pinright]
     } else {
-	puts stdout "Warning: pin [lindex $entry 0] has no bounding box, discarding."
+	puts stdout "Warning: pin [lindex $entry 0] has no bounding box."
+	set pinleft [- [/ [dict get $pinrec x] $toppitch] 1]
+	set pinright [+ [/ [dict get $pinrec x] $toppitch] 1]
     }
+    lappend newtoprow [concat $entry $pinleft $pinright]
 }
 
 set newbotrow {}
@@ -661,10 +667,12 @@ foreach entry $botrow {
     if {![catch {set pinbbox [dict get $pinrec bbox]}]} {
 	set pinleft [/ [lindex $pinbbox 0] $botpitch]
 	set pinright [/ [lindex $pinbbox 2] $botpitch]
-	lappend newbotrow [concat $entry $pinleft $pinright]
     } else {
-	puts stdout "Warning: pin [lindex $entry 0] has no bounding box, discarding."
+	puts stdout "Warning: pin [lindex $entry 0] has no bounding box."
+	set pinleft [- [/ [dict get $pinrec x] $botpitch] 1]
+	set pinright [+ [/ [dict get $pinrec x] $botpitch] 1]
     }
+    lappend newbotrow [concat $entry $pinleft $pinright]
 }
 
 set topmax [/ $pinurx $toppitch]
