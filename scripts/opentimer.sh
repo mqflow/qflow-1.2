@@ -218,7 +218,8 @@ read_celllib -max ${libertymaxpath}
 read_verilog ${rootname}.rtlbb.v
 read_spef ${rootname}.spef
 read_sdc ${rootname}.sdc
-report_timing
+report_timing 
+report_path -num_paths 10000
 report_wns
 EOF
 
