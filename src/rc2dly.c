@@ -657,12 +657,15 @@ int main (int argc, char* argv[]) {
 	strftime(outstr, 200, "%H:%M:%S %A %B %d, %Y", tmp);
 
 	fprintf(outfile, "*SPEF \"IEEE 1481.1999\"\n");
-	fprintf(outfile, "*DATE \"%s\"\n", outstr);
 	fprintf(outfile, "*DESIGN \"%s\"\n", design);
+	fprintf(outfile, "*DATE \"%s\"\n", outstr);
 	fprintf(outfile, "*VENDOR \"%s\"\n", "unknown");
 	fprintf(outfile, "*PROGRAM \"%s\"\n", "qrouter");
 	fprintf(outfile, "*VERSION \"%s\"\n", "unknown");
+	fprintf(outfile, "*DESIGN_FLOW \"%s\"\n", "qflow");
+	fprintf(outfile, "*DIVIDER %c\n", "/");
 	fprintf(outfile, "*DELIMITER %c\n", delimiter);
+	fprintf(outfile, "*BUS_DELIMITER %s\n", "<>");
 	fprintf(outfile, "*T_UNIT 1 PS\n");
 	fprintf(outfile, "*C_UNIT 1 FF\n");
 	fprintf(outfile, "*R_UNIT 1 OHM\n");
@@ -768,7 +771,7 @@ int main (int argc, char* argv[]) {
 	fprintf(outfile, "   (TIMESCALE 1 ps)\n");
 	fprintf(outfile, "   (CELL\n");
 	fprintf(outfile, "      (CELLTYPE \"%s\")\n", design);
-	fprintf(outfile, "      (INSTANCE \"top\")\n");
+	fprintf(outfile, "      (INSTANCE)\n");
 	fprintf(outfile, "      (DELAY\n");
 	fprintf(outfile, "         (ABSOLUTE\n");
     }
@@ -1123,10 +1126,13 @@ int main (int argc, char* argv[]) {
                 currSnk = currElm->snklist;
  
                 while(currSnk != NULL) {
-		    fprintf(outfile, "            (INTERCONNECT %s %s %g)\n",
-				currElm->src->name,
-				currSnk->snknode->name,
-				currSnk->delay);
+		    char *srcname, *snkname;
+		    srcname = (!strncmp(currElm->src->name, "PIN/", 4)) ?
+				currElm->src->name + 4 : currElm->src->name;
+		    snkname = (!strncmp(currSnk->snknode->name, "PIN/", 4)) ?
+				currSnk->snknode->name + 4 : currSnk->snknode->name;
+		    fprintf(outfile, "            (INTERCONNECT %s %s (%g))\n",
+				srcname, snkname, currSnk->delay);
 
                     currSnk = currSnk->next;
                 }
