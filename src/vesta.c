@@ -1502,19 +1502,15 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
     pinptr      testpin;
     cellptr     testcell;
     instptr     testinst;
-    ddataptr	clocklist, clock2list;
-    btptr       backtrace, freebt, selectedsource, selecteddest, btcommon;
+    btptr       backtrace, freebt;
     ddataptr    delaylist, testddata, freeddata;
 
     short       srcdir, destdir;             // Signal direction in/out
     double      tdriver, setupdelay, holddelay, ddelay;
-    char        clk_sense_inv, clk_invert;
     int         numpaths, n, i, t, j;
     unsigned char result;
 
     delaylist = NULL;
-    clocklist = NULL;
-    clock2list = NULL;
 
     t = j = 0;
     if (verbose > 0) {
@@ -1549,18 +1545,6 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
             // falling edge-triggered flops
             srcdir = (testcell->type & CLK_SENSE_MASK) ? FALLING : RISING;
 
-            // Find the sources of the clock at the path start.  Create
-	    // a tree of backtraces from thisconn to all clock sources,
-	    // and return clocklist, which is a list of the sources.
-
-            find_clock_source(thisconn, &clocklist, NULL, srcdir, (unsigned char)1);
-
-            // Calculate the worst-case transition times to testlink on
-	    // each clocklist backtrace.
-
-            find_clock_transition(clocklist, thisconn, srcdir, minmax,
-			(unsigned char)1);
-
             // Report on paths and their maximum delays
             if (verbose > 1)
                 fprintf(stdout, "Paths starting at flop \"%s\" clock:\n\n",
@@ -1584,210 +1568,6 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
 
         if (verbose > 1) fprintf(stdout, "%d paths traced (%d total).\n\n", n, numpaths);
 
-        for (testddata = delaylist; testddata; testddata = testddata->next) {
-            // Copy last backtrace delay to testddata.
-            testddata->delay = testddata->backtrace->delay;
-            testddata->trans = testddata->backtrace->trans;
-            testinst = testddata->backtrace->receiver->refinst;
-
-            if (testinst != NULL) {
-                // Find the sources of the clock at the path end
-                destdir = (testinst->refcell->type & CLK_SENSE_MASK) ? FALLING : RISING;
-                testconn = find_register_clock(testinst);
-                // If testconn is NULL, this is not a register (latch, maybe?)
-                if (testconn == NULL) continue;
-
-                // Find the connection that is common to both clocks
-                result = find_clock_source(testconn, &clock2list, NULL, destdir,
-			(unsigned char)2);
-
-                if (result == (unsigned char)0) {
-
-		    // If clocklist is NULL then this is an input and there is
-		    // no way to compute relative to a common clock, because
-		    // there is no common clock.
-
-		    if (clocklist != NULL) {
-
-			// If both paths end on the same input net, then there
-			// is no connection pointer, so deal with that separately.
-			if (clocklist->backtrace->receiver->refnet ==
-			    	clock2list->backtrace->receiver->refnet) {
-			    result = (unsigned char)1;
-			}
-			else {
-
-			    // Warn about asynchronous clock sources
-			    if (verbose > 1) {
-		 		fflush(stdout);
-				fprintf(stderr, "Independent clock nets \"%s\" and \"%s\""
-					" drive related gates!\n",
-					testconn->refnet->name,
-					thisconn->refnet->name);
-			    }
-			    clk_invert = -1;
-			}
-		    }
-                }
-
-                if (result != (unsigned char)0) {
-		    // Find clock arrival times from common clock point.  Note that
-		    // the check is opposite to what is computed for the source;  if
-		    // maximum time was used to find clock-to-source, then minimum
-		    // time is used to find clock-to-destination.
-		    btcommon = find_common_clock(clock2list, clocklist);
-                    find_clock_transition(clock2list, testconn,
-				(btcommon) ? btcommon->dir : RISING,
-				~minmax, (unsigned char)2);
-
-		    // selectedsource is the end of the btcommon backtrace
-		    for (selectedsource = (btcommon) ? btcommon : clocklist->backtrace;
-				selectedsource->next;
-				selectedsource = selectedsource->next);
-		    // selecteddest is the end of the clock2list backtrace
-		    for (selecteddest = clock2list->backtrace; selecteddest->next;
-				selecteddest = selecteddest->next);
-
-                    // Add or subtract difference in arrival times between source and
-                    // destination clocks
-
-                    testddata->skew = selecteddest->delay - selectedsource->delay +
-					((btcommon) ? btcommon->delay : 0.0);
-                    testddata->delay += testddata->skew;
-
-                    if (minmax == MAXIMUM_TIME) {
-                        // Add setup time for destination clocks
-                        setupdelay = calc_setup_time(testddata->trans,
-                                        testddata->backtrace->receiver->refpin,
-                                        selecteddest->trans,
-                                        testddata->backtrace->dir, minmax);
-                        testddata->setup = setupdelay;
-                    }
-                    else {
-                        // Subtract hold time for destination clocks
-                        holddelay = calc_hold_time(testddata->trans,
-                                        testddata->backtrace->receiver->refpin,
-                                        selecteddest->trans,
-                                        testddata->backtrace->dir, minmax);
-                        testddata->setup = -holddelay;
-                    }
-                    testddata->delay += testddata->setup;
-
-                    if (verbose > 1)
-                        fprintf(stdout, "Path terminated on flop \"%s\" input with max delay %g ps\n",
-                                testconn->refinst->name, testddata->delay);
-
-                    for (backtrace = testddata->backtrace; backtrace->next;
-                                backtrace = backtrace->next) {
-                        if (verbose > 1)
-                            fprintf(stdout, "   %g (%s) %s/%s -> %s/%s\n",
-                                        backtrace->delay,
-                                        backtrace->receiver->refnet->name,
-                                        backtrace->receiver->refnet->driver->refinst->name,
-                                        backtrace->receiver->refnet->driver->refpin->name,
-                                        backtrace->receiver->refinst->name,
-                                        backtrace->receiver->refpin->name);
-                    }
-                    if (verbose > 1)
-                        fprintf(stdout, "   000.000 (%s) %s/%s -> %s/%s\n",
-                                backtrace->receiver->refnet->name,
-                                backtrace->receiver->refinst->name,
-                                backtrace->receiver->refpin->name,
-                                backtrace->receiver->refinst->name,
-                                backtrace->receiver->refinst->out_connects->refpin->name);
-
-                    if (selecteddest != NULL && selectedsource != NULL) {
-                        if (verbose > 1) {
-                            if (selectedsource->receiver->refnet != selecteddest->receiver->refnet) {
-                                fprintf(stdout, "   %g %s to %s clock skew\n",
-                                        selecteddest->delay - selectedsource->delay
-					+ ((btcommon) ? btcommon->delay : 0.0),
-                                        selectedsource->receiver->refnet->name,
-                                        selecteddest->receiver->refnet->name);
-                            }
-                        }
-
-                        /* Check if the flops have the same clock sense */
-                        /* (both are clock rising edge or both are clock falling edge type) */
-
-                        if ((testinst->refcell->type & CLK_SENSE_MASK) !=
-                                        (backtrace->receiver->refinst->refcell->type
-                                        & CLK_SENSE_MASK))
-                            clk_sense_inv = 1;
-                        else
-                            clk_sense_inv = 0;
-
-                        /* If the two flops don't clock at the same time, then issue a  */
-                        /* warning that the slack time loses half a clock period.       */
-
-                        if ((verbose > 1) && (clk_invert != -1) && (clk_sense_inv != clk_invert)) {
-                            fprintf(stdout, "   Clocks are inverted relative to one another,\n");
-                            fprintf(stdout, "   implying a maximum propagation delay of 1/2 period.\n");
-                        }
-                    }
-                    if (thisconn != NULL && testconn != NULL) {
-                        if (verbose > 1) {
-                            if (minmax == MAXIMUM_TIME)
-                                fprintf(stdout, "   %g setup time at destination\n", setupdelay);
-                            else
-                                fprintf(stdout, "   %g hold time at destination\n", holddelay);
-                        }
-                    }
-
-                    if (verbose > 1) fprintf(stdout, "\n");
-                }
-            }
-            else if (verbose > 1) {
-                fprintf(stdout, "Path terminated on output \"%s\" with max delay %g ps\n",
-                                testddata->backtrace->receiver->refnet->name, testddata->delay);
-
-                backtrace = testddata->backtrace;
-                fprintf(stdout, "   %g (%s) %s/%s -> [output pin]\n",
-                        backtrace->delay,
-                        backtrace->receiver->refnet->name,
-                        backtrace->receiver->refnet->driver->refinst->name,
-                        backtrace->receiver->refnet->driver->refpin->name);
-
-                for (backtrace = backtrace->next; backtrace->next; backtrace = backtrace->next) {
-                    fprintf(stdout, "   %g (%s) %s/%s -> %s/%s\n",
-                                backtrace->delay,
-                                backtrace->receiver->refnet->name,
-                                backtrace->receiver->refnet->driver->refinst->name,
-                                backtrace->receiver->refnet->driver->refpin->name,
-                                backtrace->receiver->refinst->name,
-                                backtrace->receiver->refpin->name);
-                }
-                fprintf(stdout, "   000.000 (%s) %s/%s -> %s/%s\n\n",
-                        backtrace->receiver->refnet->name,
-                        backtrace->receiver->refinst->name,
-                        backtrace->receiver->refpin->name,
-                        backtrace->receiver->refinst->name,
-                        backtrace->receiver->refinst->out_connects->refpin->name);
-            }
-
-            // Clean up clock2list backtraces
-	    for (freeddata = clock2list; freeddata; freeddata = freeddata->next) {
-		while (freeddata->backtrace != NULL) {
-		    freebt = freeddata->backtrace;
-		    testconn = freebt->receiver;
-		    freeddata->backtrace = freeddata->backtrace->next;
-                    freebt->refcnt--;
-		    if (freebt->refcnt == 0) free(freebt);
-		    else break;
-		    if (testconn->visited != (unsigned char)2)
-			break;
-		    testconn->visited = (unsigned char)0;
-		}
-	    }
-
-            // Clean up clock2list
-            while (clock2list != NULL) {
-                freeddata = clock2list;
-                clock2list = clock2list->next;
-                free(freeddata);
-            }
-	}
-
         // Link delaylist data to the beginning of masterlist, and null out
         // delaylist for the next set of paths.
 
@@ -1798,27 +1578,6 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
             delaylist = NULL;
         }
 
-        // Free up clocklist backtraces
-	for (freeddata = clocklist; freeddata; freeddata = freeddata->next) {
-            while (freeddata->backtrace != NULL) {
-		freebt = freeddata->backtrace;
-		testconn = freebt->receiver;
-		freeddata->backtrace = freeddata->backtrace->next;
-                freebt->refcnt--;
-		if (freebt->refcnt == 0) free(freebt);
-		else break;
-		if (testconn->visited != (unsigned char)1)
-		    break;
-		testconn->visited = (unsigned char)0;
-	    }
-	}
-
-        // Free up clocklist
-        while (clocklist != NULL) {
-            testddata = clocklist;
-            clocklist = clocklist->next;
-            free(testddata);
-        }
     }
     return numpaths;
 }
@@ -3478,6 +3237,282 @@ print_path(btptr backtrace, FILE *file)
 }
 
 /*--------------------------------------------------------------*/
+/* Given a list of paths, find the clock at the source and the	*/
+/* destination (if neither is a pin), and compute the clock	*/
+/* skew between them.  Also compute the setup or hold at the	*/
+/* destination.	 Save these values in the path record.		*/
+/*--------------------------------------------------------------*/
+
+void
+find_clock_skews(ddataptr pathlist, char minmax)
+{
+    connptr testconn, thisconn;
+    instptr  testinst;
+
+    ddataptr testddata, srcddata, freeddata;
+    ddataptr clocklist, clock2list;
+    btptr    backtrace, freebt, pathbt, btcommon;
+    btptr    selectedsource, selecteddest;
+
+    short srcdir, destdir;		// Signal direction in/out
+    double setupdelay, holddelay;
+    unsigned char result;
+    char	clk_invert, clk_sense_inv;
+
+    clocklist = NULL;
+    clock2list = NULL;
+    
+    for (testddata = pathlist; testddata; testddata = testddata->next) {
+
+        // Find the end of the linked list, which is the path start.
+        for (pathbt = testddata->backtrace; pathbt->next; pathbt = pathbt->next);
+	thisconn = pathbt->receiver;
+
+        if (thisconn && thisconn->refpin) {
+            // Find the sources of the clock at the path start.  Create
+	    // a tree of backtraces from thisconn to all clock sources,
+	    // and return clocklist, which is a list of the sources.
+
+            find_clock_source(thisconn, &clocklist, NULL, srcdir, (unsigned char)1);
+
+            // Calculate the worst-case transition times to testlink on
+	    // each clocklist backtrace.
+
+            find_clock_transition(clocklist, thisconn, srcdir, minmax,
+			(unsigned char)1);
+	}
+
+        // Copy last backtrace delay to testddata.
+        testddata->delay = testddata->backtrace->delay;
+        testddata->trans = testddata->backtrace->trans;
+        testinst = testddata->backtrace->receiver->refinst;
+        selecteddest = selectedsource = NULL;
+
+        if (testinst != NULL) {
+            // Find the sources of the clock at the path end
+            destdir = (testinst->refcell->type & CLK_SENSE_MASK) ? FALLING : RISING;
+            testconn = find_register_clock(testinst);
+            // If testconn is NULL, this is not a register (latch, maybe?)
+            if (testconn == NULL) continue;
+
+            // Find the connection that is common to both clocks
+            result = find_clock_source(testconn, &clock2list, NULL, destdir,
+			(unsigned char)2);
+
+	    if ((result == (unsigned char)0) && (clocklist != NULL)) {
+		// If both paths end on the same input net, then there
+		// is no connection pointer, so deal with that separately.
+
+		if (clocklist->backtrace->receiver->refnet !=
+			    	clock2list->backtrace->receiver->refnet) {
+
+		    // Warn about asynchronous clock sources
+		    if (verbose > 1) {
+		 	fflush(stdout);
+			fprintf(stderr, "Independent clock nets \"%s\" and \"%s\""
+					" drive related gates!\n",
+					testconn->refnet->name,
+					thisconn->refnet->name);
+		    }
+		    clk_invert = -1;
+		}
+            }
+
+	    // If clocklist is NULL then this is an input and there is
+	    // no way to compute relative to a common clock, because
+	    // there is no common clock.
+
+	    if (clocklist != NULL) {
+		// Find clock arrival times from common clock point.  Note that
+		// the check is opposite to what is computed for the source;  if
+		// maximum time was used to find clock-to-source, then minimum
+		// time is used to find clock-to-destination.
+
+		btcommon = find_common_clock(clock2list, clocklist);
+                find_clock_transition(clock2list, testconn,
+				(btcommon) ? btcommon->dir : RISING,
+				~minmax, (unsigned char)2);
+
+		// selectedsource is the end of the btcommon backtrace
+		for (selectedsource = (btcommon) ? btcommon : clocklist->backtrace;
+				selectedsource->next;
+				selectedsource = selectedsource->next);
+		// selecteddest is the end of the clock2list backtrace
+		for (selecteddest = clock2list->backtrace; selecteddest->next;
+				selecteddest = selecteddest->next);
+
+                // Add or subtract difference in arrival times between source and
+                // destination clocks
+
+                testddata->skew = selectedsource->delay - selecteddest->delay +
+					((btcommon) ? btcommon->delay : 0.0);
+                testddata->delay += testddata->skew;
+	    }
+	    else if (clock2list) {
+		// Still need to know destination's clock source to
+		// calculate setup or hold time.
+		for (selecteddest = clock2list->backtrace; selecteddest->next;
+				selecteddest = selecteddest->next);
+	    }
+
+            if (minmax == MAXIMUM_TIME) {
+                // Add setup time for destination clocks
+                setupdelay = calc_setup_time(testddata->trans,
+                                        testddata->backtrace->receiver->refpin,
+                                        selecteddest->trans,
+                                        testddata->backtrace->dir, minmax);
+                testddata->setup = setupdelay;
+            }
+            else {
+                // Subtract hold time for destination clocks
+                holddelay = calc_hold_time(testddata->trans,
+                                        testddata->backtrace->receiver->refpin,
+                                        selecteddest->trans,
+                                        testddata->backtrace->dir, minmax);
+                testddata->setup = -holddelay;
+            }
+            testddata->delay += testddata->setup;
+
+            if (verbose > 1)
+                fprintf(stdout, "Path terminated on flop \"%s\" input with max delay %g ps\n",
+                                testconn->refinst->name, testddata->delay);
+
+            for (backtrace = testddata->backtrace; backtrace->next;
+                                backtrace = backtrace->next) {
+                if (verbose > 1)
+                    fprintf(stdout, "   %g (%s) %s/%s -> %s/%s\n",
+                                backtrace->delay,
+                                backtrace->receiver->refnet->name,
+                                backtrace->receiver->refnet->driver->refinst->name,
+                                backtrace->receiver->refnet->driver->refpin->name,
+                                backtrace->receiver->refinst->name,
+                                backtrace->receiver->refpin->name);
+            }
+            if (verbose > 1)
+                fprintf(stdout, "   000.000 (%s) %s/%s -> %s/%s\n",
+                                backtrace->receiver->refnet->name,
+                                backtrace->receiver->refinst->name,
+                                backtrace->receiver->refpin->name,
+                                backtrace->receiver->refinst->name,
+                                backtrace->receiver->refinst->out_connects->refpin->name);
+
+            if (selecteddest != NULL && selectedsource != NULL) {
+                if (verbose > 1) {
+                    if (selectedsource->receiver->refnet != selecteddest->receiver->refnet) {
+                        fprintf(stdout, "   %g %s to %s clock skew\n",
+                                selecteddest->delay - selectedsource->delay
+				+ ((btcommon) ? btcommon->delay : 0.0),
+                                selectedsource->receiver->refnet->name,
+                                selecteddest->receiver->refnet->name);
+                    }
+                }
+
+                /* Check if the flops have the same clock sense */
+                /* (both are clock rising edge or both are clock falling edge type) */
+
+		if (backtrace->receiver->refinst == NULL)
+		    clk_sense_inv = 1;
+                else if ((testinst->refcell->type & CLK_SENSE_MASK) !=
+                                        (backtrace->receiver->refinst->refcell->type
+                                        & CLK_SENSE_MASK))
+                    clk_sense_inv = 1;
+                else
+                    clk_sense_inv = 0;
+
+                /* If the two flops don't clock at the same time, then issue a  */
+                /* warning that the slack time loses half a clock period.       */
+
+                if ((verbose > 1) && (clk_invert != -1) && (clk_sense_inv != clk_invert)) {
+                    fprintf(stdout, "   Clocks are inverted relative to one another,\n");
+                    fprintf(stdout, "   implying a maximum propagation delay of 1/2 period.\n");
+                }
+            }
+            if (thisconn != NULL && testconn != NULL) {
+                if (verbose > 1) {
+                    if (minmax == MAXIMUM_TIME)
+                        fprintf(stdout, "   %g setup time at destination\n", setupdelay);
+                    else
+                        fprintf(stdout, "   %g hold time at destination\n", holddelay);
+                }
+            }
+
+            if (verbose > 1) fprintf(stdout, "\n");
+        }
+        else if (verbose > 1) {
+            fprintf(stdout, "Path terminated on output \"%s\" with max delay %g ps\n",
+                        testddata->backtrace->receiver->refnet->name, testddata->delay);
+
+            backtrace = testddata->backtrace;
+            fprintf(stdout, "   %g (%s) %s/%s -> [output pin]\n",
+                        backtrace->delay,
+                        backtrace->receiver->refnet->name,
+                        backtrace->receiver->refnet->driver->refinst->name,
+                        backtrace->receiver->refnet->driver->refpin->name);
+
+            for (backtrace = backtrace->next; backtrace->next; backtrace = backtrace->next) {
+                fprintf(stdout, "   %g (%s) %s/%s -> %s/%s\n",
+                        backtrace->delay,
+                        backtrace->receiver->refnet->name,
+                        backtrace->receiver->refnet->driver->refinst->name,
+                        backtrace->receiver->refnet->driver->refpin->name,
+                        backtrace->receiver->refinst->name,
+                        backtrace->receiver->refpin->name);
+            }
+            fprintf(stdout, "   000.000 (%s) %s/%s -> %s/%s\n\n",
+                        backtrace->receiver->refnet->name,
+                        backtrace->receiver->refinst->name,
+                        backtrace->receiver->refpin->name,
+                        backtrace->receiver->refinst->name,
+                        backtrace->receiver->refinst->out_connects->refpin->name);
+        }
+
+        // Clean up clock2list backtraces
+	for (freeddata = clock2list; freeddata; freeddata = freeddata->next) {
+	    while (freeddata->backtrace != NULL) {
+		freebt = freeddata->backtrace;
+		testconn = freebt->receiver;
+		freeddata->backtrace = freeddata->backtrace->next;
+                freebt->refcnt--;
+		if (freebt->refcnt == 0) free(freebt);
+		else break;
+		if (testconn->visited != (unsigned char)2)
+		    break;
+		testconn->visited = (unsigned char)0;
+	    }
+	}
+
+        // Clean up clock2list
+        while (clock2list != NULL) {
+            freeddata = clock2list;
+            clock2list = clock2list->next;
+            free(freeddata);
+        }
+
+        // Free up clocklist backtraces
+	for (freeddata = clocklist; freeddata; freeddata = freeddata->next) {
+            while (freeddata->backtrace != NULL) {
+		freebt = freeddata->backtrace;
+		testconn = freebt->receiver;
+		freeddata->backtrace = freeddata->backtrace->next;
+                freebt->refcnt--;
+		if (freebt->refcnt == 0) free(freebt);
+		else break;
+		if (testconn->visited != (unsigned char)1)
+		    break;
+		testconn->visited = (unsigned char)0;
+	    }
+	}
+
+        // Free up clocklist
+        while (clocklist != NULL) {
+            freeddata = clocklist;
+            clocklist = clocklist->next;
+            free(freeddata);
+        }
+    }
+}
+
+/*--------------------------------------------------------------*/
 /* Main program                                                 */
 /*--------------------------------------------------------------*/
 
@@ -3795,6 +3830,12 @@ main(int objc, char *argv[])
     fprintf(stdout, "Number of paths analyzed:  %d\n", numpaths);
     fflush(stdout);
 
+    /* For each terminal path, find the source and destination clocks	*/
+    /* (where they exist) and compute clock skew.  Also compute setup	*/
+    /* or hold at the destination.					*/
+
+    find_clock_skews(pathlist, MAXIMUM_TIME);
+
     /*--------------------------------------------------*/
     /* Collect paths into a non-linked array so that    */
     /* they can be sorted by delay time                 */
@@ -3945,6 +3986,8 @@ main(int objc, char *argv[])
     fprintf(stdout, "Number of paths analyzed:  %d\n", numpaths);
     fflush(stdout);
 
+    find_clock_skews(pathlist, MINIMUM_TIME);
+
     /*--------------------------------------------------*/
     /* Collect paths into a non-linked array so that    */
     /* they can be sorted by delay time                 */
@@ -4075,6 +4118,8 @@ main(int objc, char *argv[])
     fprintf(stdout, "Number of paths analyzed:  %d\n", numpaths);
     fflush(stdout);
 
+    find_clock_skews(pathlist, MAXIMUM_TIME);
+
     /*--------------------------------------------------*/
     /* Collect paths into a non-linked array so that    */
     /* they can be sorted by delay time                 */
@@ -4188,6 +4233,8 @@ main(int objc, char *argv[])
     numpaths = find_clock_to_term_paths(inputconnlist, &pathlist, netlist, MINIMUM_TIME);
     fprintf(stdout, "Number of paths analyzed:  %d\n", numpaths);
     fflush(stdout);
+
+    find_clock_skews(pathlist, MINIMUM_TIME);
 
     /*--------------------------------------------------*/
     /* Collect paths into a non-linked array so that    */
