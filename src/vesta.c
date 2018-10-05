@@ -3344,7 +3344,7 @@ find_clock_skews(ddataptr pathlist, char minmax)
                 // Add or subtract difference in arrival times between source and
                 // destination clocks
 
-                testddata->skew = selectedsource->delay - selecteddest->delay +
+                testddata->skew = selectedsource->delay - selecteddest->delay -
 					((btcommon) ? btcommon->delay : 0.0);
                 testddata->delay += testddata->skew;
 	    }
@@ -3353,6 +3353,7 @@ find_clock_skews(ddataptr pathlist, char minmax)
 		// calculate setup or hold time.
 		for (selecteddest = clock2list->backtrace; selecteddest->next;
 				selecteddest = selecteddest->next);
+		testddata->skew = 0.0;
 	    }
 
             if (minmax == MAXIMUM_TIME) {
@@ -3364,12 +3365,13 @@ find_clock_skews(ddataptr pathlist, char minmax)
                 testddata->setup = setupdelay;
             }
             else {
-                // Subtract hold time for destination clocks
+                // Subtract hold time for destination clocks (note that hold times
+		// are defined as typically negative values in the liberty format)
                 holddelay = calc_hold_time(testddata->trans,
                                         testddata->backtrace->receiver->refpin,
                                         selecteddest->trans,
                                         testddata->backtrace->dir, minmax);
-                testddata->setup = -holddelay;
+                testddata->setup = holddelay;
             }
             testddata->delay += testddata->setup;
 
@@ -3948,10 +3950,10 @@ main(int objc, char *argv[])
         }
     }
     else if (orderedpaths[0] != NULL) {
-        fprintf(stdout, "Computed maximum clock frequency (zero slack) = %g MHz\n",
+        fprintf(stdout, "Computed maximum clock frequency (zero margin) = %g MHz\n",
                 (1.0E6 / orderedpaths[0]->delay));
         if (fsum) fprintf(fsum, "Computed maximum clock frequency "
-			"(zero slack) = %g MHz\n",
+			"(zero margin) = %g MHz\n",
                 	(1.0E6 / orderedpaths[0]->delay));
     }
     fprintf(stdout, "-----------------------------------------\n\n");
