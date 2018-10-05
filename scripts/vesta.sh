@@ -144,10 +144,14 @@ if ($dodelays == 1) then
        ${bindir}/rc2dly -D : -r ${rootname}.rc -l ${libertypath} \
 		-d ${synthdir}/${rootname}.spef
 
-       # Translate <, >, and $ in file to _ to match the verilog.
+       # Translate <, >, and $ in file to _ to match the verilog.  Make translations
+       # ONLY in the name mapping section.
        if ( -f ${synthdir}/${rootname}.spef ) then
 	  cat ${synthdir}/${rootname}.spef | sed \
-		-e 's/\$/_/g' -e 's/</_/g' -e 's/>/_/g' -e 's/\./_/g' \
+		-e '/^\*[0-9]/s/\$/_/g' \
+		-e '/^\*[0-9]/s/</_/g' \
+		-e '/^\*[0-9]/s/>/_/g' \
+		-e '/^\*[0-9]/s/\./_/g' \
 		> ${synthdir}/${rootname}.spefx
 	  mv ${synthdir}/${rootname}.spefx ${synthdir}/${rootname}.spef
        endif
@@ -158,6 +162,15 @@ if ($dodelays == 1) then
 		|& tee -a ${synthlog}
        ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
 		-d ${synthdir}/${rootname}.sdf
+
+       # Translate <, >, in file to [, ] to match the verilog (rtl.nopwr.v version).
+       # (Because SDF format does not recognize alternative array delimiters)
+       if ( -f ${synthdir}/${rootname}.sdf ) then
+	  cat ${synthdir}/${rootname}.sdf | sed \
+		-e 's/</\[/g' -e 's/>/\]/g' \
+		> ${synthdir}/${rootname}.sdfx
+	  mv ${synthdir}/${rootname}.sdfx ${synthdir}/${rootname}.sdf
+       endif
 
        cd ${synthdir}
 

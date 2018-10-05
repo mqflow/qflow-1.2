@@ -343,6 +343,8 @@ typedef struct _btdata {
 
 typedef struct _delaydata {
    double delay;        /* Total delay, including setup and clock skew */
+   double skew;		/* Part of total delay attributed to clock skew */
+   double setup;	/* Part of total delay attributed to setup (+) or hold (-) */
    double trans;        /* Transition time at destination, used to find setup */
    btptr backtrace;
    ddataptr  next;
@@ -927,9 +929,9 @@ double calc_hold_time(double trans, pinptr testpin, double clktrans, short sense
     }
 
     if (minmax == MAXIMUM_TIME)
-        return (holdr > holdf) ? holdr : holdf;
-    else
         return (holdr < holdf) ? holdr : holdf;
+    else
+        return (holdr > holdf) ? holdr : holdf;
 }
 
 /*----------------------------------------------------------------------*/
@@ -1043,6 +1045,8 @@ makehead:
     newdataptr->backtrace = newclock;
     if (newclock) newclock->refcnt++;
     newdataptr->delay = 0.0;
+    newdataptr->skew = 0.0;
+    newdataptr->setup = 0.0;
     newdataptr->trans = 0.0;
     newdataptr->next = *clocklist;
     *clocklist = newdataptr;
@@ -1069,8 +1073,7 @@ makehead:
 /* blindly recursive.						*/
 /*--------------------------------------------------------------*/
 
-void
-find_clock_delay(int dir, double delay, double trans,
+void find_clock_delay(int dir, double delay, double trans,
                 btptr backtrace, connptr terminal, char minmax,
 		unsigned char mode) {
 
@@ -1282,6 +1285,10 @@ int find_path_delay(int dir, double delay, double trans, connptr receiver,
                     }
                     testddata->backtrace = newbtdata;
 		    if (newbtdata) newbtdata->refcnt++;
+
+		    /* Update the delay at testddata */
+		    testddata->delay = newbtdata->delay + testddata->setup
+				+ testddata->skew;
                 }
             }
             else
@@ -1297,6 +1304,8 @@ int find_path_delay(int dir, double delay, double trans, connptr receiver,
             numpaths++;
             newddata = (ddataptr)malloc(sizeof(delaydata));
             newddata->delay = 0.0;
+            newddata->setup = 0.0;
+            newddata->skew = 0.0;
             newddata->trans = 0.0;
             newddata->backtrace = newbtdata;
 	    if (newbtdata) newbtdata->refcnt++;
@@ -1326,7 +1335,7 @@ int find_path_delay(int dir, double delay, double trans, connptr receiver,
 /* found on the upstream search find_clock_source().		*/
 /*--------------------------------------------------------------*/
 
-find_clock_transition(ddataptr clocklist, connptr testlink, short dir,
+void find_clock_transition(ddataptr clocklist, connptr testlink, short dir,
 	char minmax, unsigned char mode)
 {
     ddataptr testclock;
@@ -1600,28 +1609,40 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
 
 		    if (clocklist != NULL) {
 
-			// Warn about asynchronous clock sources
-			if (verbose > 1) {
-			    fflush(stdout);
-			    fprintf(stderr, "Independent clock nets \"%s\" and \"%s\""
+			// If both paths end on the same input net, then there
+			// is no connection pointer, so deal with that separately.
+			if (clocklist->backtrace->receiver->refnet ==
+			    	clock2list->backtrace->receiver->refnet) {
+			    result = (unsigned char)1;
+			}
+			else {
+
+			    // Warn about asynchronous clock sources
+			    if (verbose > 1) {
+		 		fflush(stdout);
+				fprintf(stderr, "Independent clock nets \"%s\" and \"%s\""
 					" drive related gates!\n",
 					testconn->refnet->name,
 					thisconn->refnet->name);
+			    }
+			    clk_invert = -1;
 			}
-			clk_invert = -1;
 		    }
                 }
-                else {
+
+                if (result != (unsigned char)0) {
 		    // Find clock arrival times from common clock point.  Note that
 		    // the check is opposite to what is computed for the source;  if
 		    // maximum time was used to find clock-to-source, then minimum
 		    // time is used to find clock-to-destination.
 		    btcommon = find_common_clock(clock2list, clocklist);
                     find_clock_transition(clock2list, testconn,
-				btcommon->dir, ~minmax, (unsigned char)2);
+				(btcommon) ? btcommon->dir : RISING,
+				~minmax, (unsigned char)2);
 
 		    // selectedsource is the end of the btcommon backtrace
-		    for (selectedsource = btcommon; selectedsource->next;
+		    for (selectedsource = (btcommon) ? btcommon : clocklist->backtrace;
+				selectedsource->next;
 				selectedsource = selectedsource->next);
 		    // selecteddest is the end of the clock2list backtrace
 		    for (selecteddest = clock2list->backtrace; selecteddest->next;
@@ -1630,9 +1651,9 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
                     // Add or subtract difference in arrival times between source and
                     // destination clocks
 
-                    testddata->delay += selecteddest->delay;
-                    testddata->delay -= selectedsource->delay;
-                    testddata->delay += btcommon->delay;
+                    testddata->skew = selecteddest->delay - selectedsource->delay +
+					((btcommon) ? btcommon->delay : 0.0);
+                    testddata->delay += testddata->skew;
 
                     if (minmax == MAXIMUM_TIME) {
                         // Add setup time for destination clocks
@@ -1640,7 +1661,7 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
                                         testddata->backtrace->receiver->refpin,
                                         selecteddest->trans,
                                         testddata->backtrace->dir, minmax);
-                        testddata->delay += setupdelay;
+                        testddata->setup = setupdelay;
                     }
                     else {
                         // Subtract hold time for destination clocks
@@ -1648,8 +1669,9 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
                                         testddata->backtrace->receiver->refpin,
                                         selecteddest->trans,
                                         testddata->backtrace->dir, minmax);
-                        testddata->delay -= holddelay;
+                        testddata->setup = -holddelay;
                     }
+                    testddata->delay += testddata->setup;
 
                     if (verbose > 1)
                         fprintf(stdout, "Path terminated on flop \"%s\" input with max delay %g ps\n",
@@ -1679,7 +1701,7 @@ int find_clock_to_term_paths(connlistptr clockedlist, ddataptr *masterlist, netp
                             if (selectedsource->receiver->refnet != selecteddest->receiver->refnet) {
                                 fprintf(stdout, "   %g %s to %s clock skew\n",
                                         selecteddest->delay - selectedsource->delay
-					+ btcommon->delay,
+					+ ((btcommon) ? btcommon->delay : 0.0),
                                         selectedsource->receiver->refnet->name,
                                         selecteddest->receiver->refnet->name);
                             }
@@ -3393,6 +3415,9 @@ print_path_component(int netFWidth, int instFWidth, int pinFWidth, int recvFWidt
                 recvFWidth, backtrace->receiver->refinst->name,
                               backtrace->receiver->refpin->name);
     }
+    else if (backtrace->receiver->refnet)
+        fprintf(file, "%s", backtrace->receiver->refnet->name);
+
     fprintf(file, "\n");
 }
 
@@ -3856,6 +3881,19 @@ main(int objc, char *argv[])
         if (fsum) fprintf(fsum, "\n");
         if (longFormat) print_path(testddata->backtrace, stdout);
         if (fsum) print_path(testddata->backtrace, fsum);
+
+        if (testddata->backtrace->receiver->refinst != NULL) {
+	    if (longFormat) {
+		fprintf(stdout, "   clock skew at destination = %g\n", testddata->skew);
+		fprintf(stdout, "   setup at destination = %g\n", testddata->setup);
+		fprintf(stdout, "\n");
+	    }
+	    if (fsum) {
+		fprintf(fsum, "   clock skew at destination = %g\n", testddata->skew);
+		fprintf(fsum, "   setup at destination = %g\n", testddata->setup);
+		fprintf(fsum, "\n");
+	    }
+	}
     }
 
     if (period > 0.0) {
@@ -3976,6 +4014,19 @@ main(int objc, char *argv[])
         if (longFormat) print_path(testddata->backtrace, stdout);
         if (fsum) print_path(testddata->backtrace, fsum);
 
+        if (testddata->backtrace->receiver->refinst != NULL) {
+	    if (longFormat) {
+		fprintf(stdout, "   clock skew at destination = %g\n", testddata->skew);
+		fprintf(stdout, "   hold at destination = %g\n", testddata->setup);
+		fprintf(stdout, "\n");
+	    }
+	    if (fsum) {
+		fprintf(fsum, "   clock skew at destination = %g\n", testddata->skew);
+		fprintf(fsum, "   hold at destination = %g\n", testddata->setup);
+		fprintf(fsum, "\n");
+	    }
+	}
+
         if (testddata->delay < 0.0) badtiming = 1;
     }
     if (badtiming) {
@@ -4088,6 +4139,17 @@ main(int objc, char *argv[])
         }
         if (longFormat) print_path(testddata->backtrace, stdout);
         if (fsum) print_path(testddata->backtrace, fsum);
+
+        if (testddata->backtrace->receiver->refinst != NULL) {
+	    if (longFormat) {
+		fprintf(stdout, "   setup at destination = %g\n", testddata->setup);
+		fprintf(stdout, "\n");
+	    }
+	    if (fsum) {
+		fprintf(fsum, "   setup at destination = %g\n", testddata->setup);
+		fprintf(fsum, "\n");
+	    }
+	}
     }
 
     fprintf(stdout, "-----------------------------------------\n\n");
@@ -4191,6 +4253,17 @@ main(int objc, char *argv[])
         }
         if (longFormat) print_path(testddata->backtrace, stdout);
         if (fsum) print_path(testddata->backtrace, fsum);
+
+        if (testddata->backtrace->receiver->refinst != NULL) {
+	    if (longFormat) {
+		fprintf(stdout, "   hold at destination = %g\n", testddata->setup);
+		fprintf(stdout, "\n");
+	    }
+	    if (fsum) {
+		fprintf(fsum, "   hold at destination = %g\n", testddata->setup);
+		fprintf(fsum, "\n");
+	    }
+	}
     }
 
     fprintf(stdout, "-----------------------------------------\n\n");

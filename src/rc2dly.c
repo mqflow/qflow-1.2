@@ -663,7 +663,7 @@ int main (int argc, char* argv[]) {
 	fprintf(outfile, "*PROGRAM \"%s\"\n", "qrouter");
 	fprintf(outfile, "*VERSION \"%s\"\n", "unknown");
 	fprintf(outfile, "*DESIGN_FLOW \"%s\"\n", "qflow");
-	fprintf(outfile, "*DIVIDER %c\n", "/");
+	fprintf(outfile, "*DIVIDER %s\n", "/");
 	fprintf(outfile, "*DELIMITER %c\n", delimiter);
 	fprintf(outfile, "*BUS_DELIMITER %s\n", "<>");
 	fprintf(outfile, "*T_UNIT 1 PS\n");
