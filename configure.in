@@ -159,6 +159,21 @@ AC_ARG_WITH(opentimer,
    AC_PATH_PROG(QFLOW_OPENTIMER_PATH, ot-shell, , )])
 AC_DEFINE_UNQUOTED(QFLOW_OPENTIMER_PATH, "$QFLOW_OPENTIMER_PATH")
 
+AC_ARG_WITH(opensta,
+[  --with-opensta=DIR		path to sta], [
+   if test -d "$withval"; then
+      QFLOW_OPENSTA_DIR=$withval
+   elif test -f "$withval"; then
+      # Path includes "sta";  remove it
+      QFLOW_OPENSTA_DIR=${withval%/sta}
+   else
+      QFLOW_OPENSTA_DIR=${PATH}
+   fi
+   AC_PATH_PROG(QFLOW_OPENSTA_PATH, sta, , $QFLOW_OPENSTA_DIR)
+], [
+   AC_PATH_PROG(QFLOW_OPENSTA_PATH, sta, , )])
+AC_DEFINE_UNQUOTED(QFLOW_OPENSTA_PATH, "$QFLOW_OPENSTA_PATH")
+
 dnl Expand the prefix variable
 if test "x$prefix" = xNONE ; then
    prefix=$ac_default_prefix
@@ -186,6 +201,7 @@ dnl AC_SUBST(QFLOW_QROUTER_PATH)
 dnl AC_SUBST(QFLOW_MAGIC_PATH)
 dnl AC_SUBST(QFLOW_NETGEN_PATH)
 dnl AC_SUBST(QFLOW_OPENTIMER_PATH)
+dnl AC_SUBST(QFLOW_OPENSTA_PATH)
 
 AC_SUBST(QFLOW_BIN_DIR)
 AC_SUBST(QFLOW_LIB_DIR)
@@ -230,6 +246,14 @@ fi
 
 AC_SUBST(HAVE_OPENTIMER)
 
+if test "x${ac_cv_path_QFLOW_OPENSTA_PATH}" == "x"; then
+   HAVE_OPENSTA=0
+else
+   HAVE_OPENSTA=1
+fi
+
+AC_SUBST(HAVE_OPENSTA)
+
 AC_OUTPUT(Makefile scripts/Makefile src/Makefile tech/Makefile tech/osu050/Makefile tech/osu035/Makefile tech/osu018/Makefile tech/gscl45nm/Makefile)
 
 echo ""
@@ -268,10 +292,21 @@ else
 fi
 
 if test "x${ac_cv_path_QFLOW_OPENTIMER_PATH}" == "x"; then
-#  echo "WARNING: OpenTimer not found.  Use --with-opentimer=<DIR>"
-   echo "Using Vesta STA tool (internal)"
+#  echo "INFO: OpenTimer not found.  Use --with-opentimer=<DIR>"
+   if test "x${ac_cv_path_QFLOW_OPENSTA_PATH}" == "x"; then
+       echo "Using Vesta STA tool (internal)"
+   fi
 else
    echo "EXPERIMENTAL: Using OpenTimer static timing analysys tool at: ${ac_cv_path_QFLOW_OPENTIMER_PATH}"
+fi
+
+if test "x${ac_cv_path_QFLOW_OPENSTA_PATH}" == "x"; then
+#  echo "INFO: OpenSTA not found.  Use --with-opensta=<DIR>"
+   if test "x${ac_cv_path_QFLOW_OPENTIMER_PATH}" == "x"; then
+      echo "Using Vesta STA tool (internal)"
+   fi
+else
+   echo "EXPERIMENTAL: Using OpenSTA static timing analysys tool at: ${ac_cv_path_QFLOW_OPENSTA_PATH}"
 fi
 
 if test "x${HAVE_PYTHON3}" == "x"; then

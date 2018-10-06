@@ -1652,13 +1652,26 @@ class QflowManager(ttk.Frame):
         if os.path.exists(logfile):
             statbuf = os.stat(logfile)
             if statbuf.st_mtime >= stime:
-                # Check specifically for 'Design meets minimum hold timing'
+                # Check for "MET" or "VIOLATED" indicating output from
+                # OpenSTA or OpenTimer, or 'Design meets minimum hold timing'
+                # for output from vesta.
                 sta_ok = False
+                is_not_vesta = False
                 with open(logfile, 'r') as ifile:
                     for line in ifile:
                         if 'Design meets minimum' in line:
                             sta_ok = True
                             break
+                        elif 'MET' in line or 'VIOLATED' in line:
+                            is_not_vesta = True
+                            break
+                if is_not_vesta:
+                    sta_ok = True
+                    with open(logfile, 'r') as ifile:
+                        for line in ifile:
+                            if 'VIOLATED' in line:
+                                sta_ok = False
+                                break
                 if not sta_ok:
                     self.print('Status: STA log file incomplete or timing failed.')
                     if self.sta_cont.get() == 0:
@@ -1722,12 +1735,24 @@ class QflowManager(ttk.Frame):
             statbuf = os.stat(logfile)
             if statbuf.st_mtime >= stime:
                 # Check specifically for 'Design meets minimum hold timing'
+                # for vesta or MET or VIOLATED for OpenSTA and OpenTimer
+                is_not_vesta = False
                 sta_ok = False
                 with open(logfile, 'r') as ifile:
                     for line in ifile:
                         if 'Design meets minimum' in line:
                             sta_ok = True
                             break
+                        elif 'MET' in line or 'VIOLATED' in line:
+                            is_not_vesta = True
+                            break
+                if is_not_vesta:
+                    sta_ok = True
+                    with open(logfile, 'r') as ifile:
+                        for line in ifile:
+                            if 'VIOLATED' in line:
+                                sta_ok = False
+                                break
                 if not sta_ok:
                     self.print('Status: post-route STA log file incomplete or timing failed.')
                     if self.post_sta_cont.get() == 0:

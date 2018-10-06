@@ -1,12 +1,12 @@
 #!/bin/tcsh -f
 #----------------------------------------------------------
-# Static timing analysis script using OpenTimer
+# Static timing analysis script using OpenSTA
 #----------------------------------------------------------
-# Tim Edwards, 10/02/18, for Open Circuit Design
+# Tim Edwards, 10/05/18, for Open Circuit Design
 #----------------------------------------------------------
 
 if ($#argv < 2) then
-   echo Usage:  opentimer.sh [options] <project_path> <source_name>
+   echo Usage:  opensta.sh [options] <project_path> <source_name>
    exit 1
 endif
 
@@ -21,7 +21,7 @@ if ($argc == 2) then
    set argv1=`echo $cmdargs | cut -d' ' -f1`
    set argv2=`echo $cmdargs | cut -d' ' -f2`
 else
-   echo Usage:  opentimer.sh [options] <project_path> <source_name>
+   echo Usage:  opensta.sh [options] <project_path> <source_name>
    echo   where
    echo       <project_path> is the name of the project directory containing
    echo                 a file called qflow_vars.sh.
@@ -64,8 +64,8 @@ if (-f project_vars.sh) then
    source project_vars.sh
 endif
 
-if (! ${?opentimer_options} ) then
-   set opentimer_options = ""
+if (! ${?opensta_options} ) then
+   set opensta_options = ""
 endif
 
 if (!($?logdir)) then
@@ -161,27 +161,27 @@ if ($dodelays == 1) then
        ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
 		-d ${synthdir}/${rootname}.dly
 
-       # Run rc2dly again to get SPEF format file
-       echo "Converting qrouter output to SPEF delay format" |& tee -a ${synthlog}
-       echo "Running rc2dly -D : -r ${rootname}.rc -l ${libertypath} -d ${rootname}.spef" \
+       # Run rc2dly again to get SDF format file
+       echo "Converting qrouter output to SDF delay format" |& tee -a ${synthlog}
+       echo "Running rc2dly -r ${rootname}.rc -l ${libertypath} -d ${rootname}.sdf" \
 		|& tee -a ${synthlog}
-       ${bindir}/rc2dly -D : -r ${rootname}.rc -l ${libertypath} \
-		-d ${synthdir}/${rootname}.spef
+       ${bindir}/rc2dly -r ${rootname}.rc -l ${libertypath} \
+		-d ${synthdir}/${rootname}.sdf
 
-       # Translate <, >, and $ in file to _ to match the verilog.
-       if ( -f ${synthdir}/${rootname}.spef ) then
-	  cat ${synthdir}/${rootname}.spef | sed \
-		-e 's/\$/_/g' -e 's/</_/g' -e 's/>/_/g' -e 's/\./_/g' \
-		> ${synthdir}/${rootname}.spefx
-	  mv ${synthdir}/${rootname}.spefx ${synthdir}/${rootname}.spef
+       # Translate <, > to [ ] to match the verilog, as SDF format does not have
+       # the ability to change array delimiters.
+       if ( -f ${synthdir}/${rootname}.sdf ) then
+	  cat ${synthdir}/${rootname}.sdf | sed -e 's/</\[/g' -e 's/>/\]/g' \
+		> ${synthdir}/${rootname}.sdfx
+	  mv ${synthdir}/${rootname}.sdfx ${synthdir}/${rootname}.sdf
        endif
 
        cd ${synthdir}
 
        # Spot check for output file
-       if ( !( -f ${rootname}.spef || \
-		( -M ${rootname}.spef < -M ${layoutdir}/${rootname}.rc ))) then
-	  echo "rc2dly failure:  No file ${rootname}.spef created." \
+       if ( !( -f ${rootname}.sdf || \
+		( -M ${rootname}.sdf < -M ${layoutdir}/${rootname}.rc ))) then
+	  echo "rc2dly failure:  No file ${rootname}.sdf created." \
 		|& tee -a ${synthlog}
           echo "Premature exit." |& tee -a ${synthlog}
           echo "Synthesis flow stopped due to error condition." >> ${synthlog}
@@ -200,42 +200,45 @@ endif
 cd ${synthdir}
 
 # Create a shell SDC file if one doesn't exist
-# (This remains to be done and will probably need to be done by a script)
+# (This remains to be done properly and will probably need to be done by a script)
 
-if ( -f ${rootname}.sdc ) then
-else
+if ( !(-f ${rootname}.sdc )) then
    echo "Creating example SDC file for timing" |& tee -a ${synthlog}
    cat > ${rootname}.sdc << EOF
-create_clock -name clock -period 4000 -waveform {0 2000} [get_ports clock]
+create_clock -name clock -period 20 [get_ports clock]
 EOF
 endif
 
-# Create the input script for OpenTimer
+# Create the input script for OpenSTA
 
-echo "Creating OpenTimer input file ${rootname}.conf" |& tee -a ${synthlog}
+echo "Creating OpenSTA input file ${rootname}.conf" |& tee -a ${synthlog}
 cat > ${rootname}.conf << EOF
-read_celllib -min ${libertyminpath}
-read_celllib -max ${libertymaxpath}
-read_verilog ${rootname}.rtlbb.v
-read_spef ${rootname}.spef
+read_liberty -min ${libertyminpath}
+read_liberty -max ${libertymaxpath}
+read_verilog ${rootname}.rtlnopwr.v
+link_design ${rootname}
+read_sdf ${rootname}.sdf
 read_sdc ${rootname}.sdc
-report_timing 
-report_path -num_paths 10000
-report_wns
+check_setup
+report_annotated_check
+report_annotated_delay
+report_checks -path_delay min_max -group_count 1000
+exit
 EOF
 
 echo ""
 if ($dodelays == 1) then
-   echo "Running OpenTimer static timing analysis with back-annotated extracted wire delays" \
+   echo "Running OpenSTA static timing analysis with back-annotated extracted wire delays" \
 		|& tee -a ${synthlog}
 else
-   echo "Running OpenTimer static timing analysis" |& tee -a ${synthlog}
+   echo "Running OpenSTA static timing analysis" |& tee -a ${synthlog}
 endif
-echo "ot-shell ${opentimer_options} -i ${rootname}.conf" |& tee -a ${synthlog}
+echo "sta ${opensta_options} -f ${rootname}.conf" |& tee -a ${synthlog}
 echo ""
-${bindir}/ot-shell ${opentimer_options} -i ${rootname}.conf |& tee -a ${synthlog}
+${bindir}/sta ${opensta_options} -f ${rootname}.conf |& tee -a ${synthlog}
 echo ""
 
 #------------------------------------------------------------
 # Done!
 #------------------------------------------------------------
+exit 0

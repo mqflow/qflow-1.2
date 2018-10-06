@@ -3,14 +3,14 @@
 #
 
 # Main compiler arguments
-CFLAGS = -g
-DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\" -DQFLOW_OPENTIMER_PATH=\"\"
+CFLAGS = -g -O2
+DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE_URL=\"\" -DSTDC_HEADERS=1 -DHAVE_SETENV=1 -DHAVE_PUTENV=1 -DTCLSH_PATH=\"/bin/tclsh\" -DQFLOW_MAGIC_PATH=\"/usr/local/bin/magic\" -DQFLOW_NETGEN_PATH=\"/usr/local/bin/netgen\" -DQFLOW_QROUTER_PATH=\"/usr/local/bin/qrouter\" -DQFLOW_GRAYWOLF_PATH=\"/usr/local/bin/graywolf\" -DQFLOW_YOSYS_PATH=\"/usr/local/bin/yosys\" -DQFLOW_OPENTIMER_PATH=\"\" -DQFLOW_OPENSTA_PATH=\"/usr/local/bin/sta\"
 LIBS = 
 LDFLAGS = 
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 75
+REVISION = 78
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
@@ -18,6 +18,7 @@ TCLSH_PATH = /bin/tclsh
 ENV_PATH = /bin/env
 HAVE_PYTHON3 = yes
 HAVE_OPENTIMER = 0
+HAVE_OPENSTA = 1
 
 DEFAULTPARSER = @QFLOW_DEFAULT_PARSER@
 
@@ -32,7 +33,8 @@ PYTHON_SCRIPTS += tksimpledialog.py helpwindow.py qflow_manager.py
 PYTHON_SCRIPTS += textreport.py tooltip.py count_lvs.py
 HELP_TEXT = qflow_help.txt
 
-SHELL_SCRIPTS = synthesize.sh placement.sh router.sh vesta.sh opentimer.sh
+SHELL_SCRIPTS = synthesize.sh placement.sh router.sh
+SHELL_SCRIPTS += vesta.sh opentimer.sh opensta.sh
 SHELL_SCRIPTS += qflow.sh checkdirs.sh
 SHELL_SCRIPTS += cleanup.sh display.sh
 SHELL_SCRIPTS += drc.sh lvs.sh gdsii.sh migrate.sh
@@ -62,6 +64,7 @@ qflow.sh:  qflow.sh.in
 	-e '/QFLOW_REVISION/s#QFLOW_REVISION#$(REVISION)#' \
 	-e '/QFLOW_VERSION/s#QFLOW_VERSION#$(VERSION)#' \
 	-e '/HAVE_OPENTIMER/s#HAVE_OPENTIMER#$(HAVE_OPENTIMER)#' \
+	-e '/HAVE_OPENSTA/s#HAVE_OPENSTA#$(HAVE_OPENSTA)#' \
 	qflow.sh.in > qflow.sh
 
 count_lvs.py: count_lvs.py.in
