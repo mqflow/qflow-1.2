@@ -336,13 +336,9 @@ class QflowManager(ttk.Frame):
         window.stopstitle = ttk.Label(window.stopframe, style = 'title.TLabel',
 		text = 'After every synthesis step:')
         window.stopstitle.pack(side = 'top')
-
-        window.stopset = ttk.Button(window.stopframe)
         window.stopset = ttk.Button(window.stopframe, text="Set stop",
 		style = 'normal.TButton', command = self.set_all_stops)
         window.stopset.pack(side = 'left')
-
-        window.stopclr = ttk.Button(window.stopframe)
         window.stopclr = ttk.Button(window.stopframe, text="Clear stop",
 		style = 'normal.TButton', command = self.clear_all_stops)
         window.stopclr.pack(side = 'left')
@@ -2543,8 +2539,10 @@ class QflowManager(ttk.Frame):
         # Can only run routing if static timing analysis has been run and passed.
         status = self.toppane.checklist.timing_result.cget('text')
         if status != 'Okay':
-            self.print('Cannot run routing until static timing analysis has passed.')
-            return
+            # Okay if forcibly skipped
+            if self.sta_cont.get() == 0:
+                self.print('Cannot run routing until static timing analysis has passed.')
+                return
 
         # Reset all the buttons and status labels below this one
         self.status = 'route'
@@ -2628,8 +2626,10 @@ class QflowManager(ttk.Frame):
         # Can only run migration if post-route timing has been run.
         status = self.toppane.checklist.backanno_result.cget('text')
         if status != 'Okay':
-            self.print('Cannot run migration until post-route static timing analysis has passed.')
-            return
+            # Okay if forcibly skipped
+            if self.post_sta_cont.get() == 0:
+                self.print('Cannot run migration until post-route static timing analysis has passed.')
+                return
 
         # Reset all the buttons and status labels below this one
         self.status = 'migrate'
@@ -3337,7 +3337,7 @@ class QflowManager(ttk.Frame):
                 self.print(line)
             except TypeError:
                 line = line.decode('utf-8')
-                pritn(line)
+                self.print(line)
 
     def printwarn(self, output):
         # Check output for warning or error
@@ -3438,6 +3438,11 @@ class QflowManager(ttk.Frame):
         for testname, testdir in zip(self.allpdknodes, self.allpdkdirs):
             if testname == pdkrootname:
                 found = True
+                # First check if pdkdir might be a symbolic link to testdir.
+                if os.path.islink(pdkdir):
+                    realpdkdir = os.path.realpath(pdkdir)
+                else:
+                    realpdkdir = pdkdir
                 if testdir != pdkdir:
                     if self.status != 'begin' and self.status != 'prep':
                         self.print('Error:  Tech directory mismatch for technology ' + pdkrootname + ': ' + pdkdir + ' vs. ' + testdir, file=sys.stderr)

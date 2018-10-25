@@ -215,7 +215,7 @@ xor_expand(char *lib_func)
 	  while (*sptr != ' ' && *sptr != '\t' && *sptr != '\0' &&
 			*sptr != ')')
 	     sptr++;
-	  if (*sptr == ')') sptr--;
+	  if (sptr != fptr) sptr--;
        }
 
        // If argument is a single character, then don't bother with parentheses
@@ -251,10 +251,10 @@ xor_expand(char *lib_func)
 	  }
        }
        else {
-	  while (*sptr != ' ' && *sptr != '\t' && sptr != lib_func &&
+	  while (*sptr != ' ' && *sptr != '\t' && sptr != newfunc &&
 			*sptr != '(')
 	     sptr--;
-	  if (*sptr == '(') sptr++;
+	  if (sptr != newfunc) sptr++;
        }
 
        // If argument is a single character, then don't bother with parentheses
@@ -275,8 +275,12 @@ xor_expand(char *lib_func)
        strcpy(savfunc, newfunc);
        start = savfunc + (sptr - newfunc);
 
-       sprintf(start, "(%s*!%s + !%s*%s) %s",
-		lhs, rhs, lhs, rhs, rest);
+       if (strlen(rest) == 0)
+	  sprintf(start, "(%s*!%s + !%s*%s)",
+			lhs, rhs, lhs, rhs);
+       else
+	  sprintf(start, "(%s*!%s + !%s*%s) %s",
+			lhs, rhs, lhs, rhs, rest);
 
 	if (rhs != NULL) free(rhs);
 	if (lhs != NULL) free(lhs);
