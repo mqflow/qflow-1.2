@@ -1031,7 +1031,7 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    if {!$dopost} {continue}
 
 		    if $first {
-		        puts -nonewline $fanno "+ ROUTED "
+		        puts -nonewline $fanno "+ FIXED "
 		        set first false
 		    } else {
 		        puts -nonewline $fanno "  NEW "
@@ -1149,7 +1149,7 @@ proc write_special {stripeinfo stripefills stripewidth stripepattern
 		    if {!$dopost} {continue}
 
 		    if $first {
-		    	puts -nonewline $fanno "+ ROUTED "
+		    	puts -nonewline $fanno "+ FIXED "
 			set first false
 		    } else {
 			puts -nonewline $fanno "  NEW "
