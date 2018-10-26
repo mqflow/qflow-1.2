@@ -115,6 +115,7 @@ if ( ${?netgen_setup} ) then
    set setup_script=${netgen_setup}
 else
    set setup_script=${techdir}/${techname}_setup.tcl
+endif
 
 # Check for existence of the netgen setup script in the techfile, and
 # alternative setup scripts that may exist in the layout directory.
