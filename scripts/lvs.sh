@@ -107,9 +107,14 @@ if ( -M ${layoutdir}/${rootname}.spice < -M ${layoutdir}/${rootname}.mag ) then
     source ${scriptdir}/migrate.sh -x ${projectpath} ${sourcename}
 endif
 
-# Check for technology setup script
+# Check for technology setup script.  If it is in the qflow technology script
+# as variable "netgen_setup", then use that.  Otherwise, assume it is in the
+# technology directory path.
 
-set setup_script=${techdir}/${techname}_setup.tcl
+if ( ${?netgen_setup} ) then
+   set setup_script=${netgen_setup}
+else
+   set setup_script=${techdir}/${techname}_setup.tcl
 
 # Check for existence of the netgen setup script in the techfile, and
 # alternative setup scripts that may exist in the layout directory.
