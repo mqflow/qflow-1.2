@@ -457,6 +457,50 @@ class QflowManager(ttk.Frame):
         window.title = ttk.Label(window, text = 'Static Timing Analysis Settings', style = 'title.TLabel')
         window.title.pack(side = 'top')
 
+        # STA tools available are set at compile time
+        self.sta_tools = []
+        self.sta_tools.append('vesta')
+        if HAVE_OPENSTA:
+            self.sta_tools.append('opensta')
+        if HAVE_OPENTIMER:
+            self.sta_tools.append('opentimer')
+
+        self.run_vesta = tkinter.BooleanVar(window)
+        self.run_opensta = tkinter.BooleanVar(window)
+        self.run_opentimer = tkinter.BooleanVar(window)
+        self.run_vesta.set(1)
+        self.run_opensta.set(0)
+        self.run_opentimer.set(0)
+
+        if len(self.sta_tools) > 1:
+            window.usevesta = ttk.Frame(window)
+            window.usevesta.pack(side = 'top', fill = 'x')
+            window.usevesta.title = ttk.Label(window.usevesta, style = 'normal.TLabel',
+			text = 'Use vesta for STA:')
+            window.usevesta.title.pack(side = 'left')
+            window.usevesta.check = ttk.Checkbutton(window.usevesta, variable = self.run_vesta)
+            window.usevesta.check.pack(side = 'left')
+
+            if 'opensta' in self.sta_tools:
+                window.useopensta = ttk.Frame(window)
+                window.useopensta.pack(side = 'top', fill = 'x')
+                window.useopensta.title = ttk.Label(window.useopensta, style = 'normal.TLabel',
+				text = 'Use OpenSTA for STA:')
+                window.useopensta.title.pack(side = 'left')
+                self.run_opensta = tkinter.BooleanVar(window.useopensta)
+                window.useopensta.check = ttk.Checkbutton(window.useopensta, variable = self.run_opensta)
+                window.useopensta.check.pack(side = 'left')
+
+            if 'opentimer' in self.sta_tools:
+                window.useopentimer = ttk.Frame(window)
+                window.useopentimer.pack(side = 'top', fill = 'x')
+                window.useopentimer.title = ttk.Label(window.useopentimer, style = 'normal.TLabel',
+				text = 'Use OpenTimer for STA:')
+                window.useopentimer.title.pack(side = 'left')
+                self.run_opentimer = tkinter.BooleanVar(window.useopentimer)
+                window.useopentimer.check = ttk.Checkbutton(window.useopentimer, variable = self.run_opentimer)
+                window.useopentimer.check.pack(side = 'left')
+
         window.longformat = ttk.Frame(window)
         window.longformat.pack(side = 'top', fill = 'x')
         window.longformat.title = ttk.Label(window.longformat, style = 'normal.TLabel',
@@ -1960,8 +2004,13 @@ class QflowManager(ttk.Frame):
         densrex = re.compile('[ \t]*set initial_density =[ \t]*([0-9\.]+)$')
         powrrex = re.compile('[ \t]*set addspacers_options =[ \t]*"-stripe ([0-9\.]+) ([0-9\.]+) PG[ ]*(.*)"$')
         vstarex = re.compile('[ \t]*set vesta_options =[ \t]*(.*)$')
+        ostarex = re.compile('[ \t]*set opensta_options =[ \t]*(.*)$')
+        otimerex = re.compile('[ \t]*set opentimer_options =[ \t]*(.*)$')
         showrex = re.compile('[ \t]*set route_show =[ \t]*(.*)$')
         lyerrex = re.compile('[ \t]*set route_layers =[ \t]*(.*)$')
+        runvstarex = re.compile('[ \t]*set run_vesta =[ \t]*(.*)$')
+        runostarex = re.compile('[ \t]*set run_opensta =[ \t]*(.*)$')
+        runotimerex = re.compile('[ \t]*set run_opentimer =[ \t]*(.*)$')
 
         # Power stripe defaults may be overridden, but we need to
         # grab the defaults from the file instead of setting
@@ -1992,6 +2041,18 @@ class QflowManager(ttk.Frame):
                 if vmatch:
                     if vmatch.group(1) == '"--long"':
                         self.long_format.set(1)
+                # Currently no options handled for OpenSTA or OpenTimer
+                # other than use/don't-use flag
+                rvmatch = runvstarex.match(line)
+                if rvmatch:
+                    self.run_vesta.set(rvmatch.group(1))
+                rosmatch = runostarex.match(line)
+                if rosmatch:
+                    self.run_opensta.set(rosmatch.group(1))
+                rotmatch = runotimerex.match(line)
+                if rotmatch:
+                    self.run_opentimer.set(rotmatch.group(1))
+
                 smatch = showrex.match(line)
                 if smatch:
                     if smatch.group(1) == 'false':
@@ -2069,12 +2130,27 @@ class QflowManager(ttk.Frame):
             except ValueError:
                 do_layers = False
 
+        run_vesta = False
+        if (self.run_vesta.get() == 1):
+            run_vesta = True
+        run_opensta = False
+        if (self.run_opensta.get() == 1):
+            run_opensta = True
+        run_opentimer = False
+        if (self.run_opentimer.get() == 1):
+            run_opentimer = True
+
         commentrex = re.compile('^[ \t]*#')
         densrex = re.compile('#?[ \t]*set initial_density =')
         powrrex = re.compile('#?[ \t]*set addspacers_options =')
         vstarex = re.compile('#?[ \t]*set vesta_options =')
+        ostarex = re.compile('#?[ \t]*set opensta_options =')
+        otimerex = re.compile('#?[ \t]*set opentimer_options =')
         showrex = re.compile('#?[ \t]*set route_show =')
         lyerrex = re.compile('#?[ \t]*set route_layers =')
+        rvstarex = re.compile('#?[ \t]*set run_vesta =')
+        rostarex = re.compile('#?[ \t]*set run_opensta =')
+        rotimerex = re.compile('#?[ \t]*set run_opentimer =')
 
         with open(pvars, 'r') as ifile:
             vartext = ifile.read()
@@ -2103,6 +2179,32 @@ class QflowManager(ttk.Frame):
                         linesub = 'set vesta_options = "--long"'
                     elif not is_comment:
                         linesub = '# set vesta_options = "--period 1E5"'
+
+                if ostarex.match(line):
+                    if not is_comment:
+                        linesub = '# set opensta_options = '
+
+                if otimerex.match(line):
+                    if not is_comment:
+                        linesub = '# set opentimer_options = '
+
+                if rvstarex.match(line):
+                    if run_vesta:
+                        linesub = '# set run_vesta = 1'
+                    elif not is_comment:
+                        linesub = 'set run_vesta = 0'
+
+                if rostarex.match(line):
+                    if run_opensta:
+                        linesub = 'set run_opensta = 1'
+                    elif not is_comment:
+                        linesub = '# set run_opensta ='
+
+                if rotimerex.match(line):
+                    if run_opentimer:
+                        linesub = 'set run_opentimer = 1'
+                    elif not is_comment:
+                        linesub = '# set run_opentimer ='
 
                 if showrex.match(line):
                     if do_graph:

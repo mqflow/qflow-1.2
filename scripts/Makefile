@@ -10,7 +10,7 @@ LDFLAGS =
 INSTALL = /bin/install -c
 
 VERSION = 1.2
-REVISION = 78
+REVISION = 80
 
 QFLOW_LIB_DIR = /usr/local/share/qflow
 QFLOW_BIN_DIR = /usr/local/bin
@@ -95,6 +95,8 @@ qflow_manager.py: qflow_manager.py.in
 	-e '/SUBST_TECH_DIR/s#SUBST_TECH_DIR#$(TECHINSTALL)#' \
 	-e '/SUBST_SCRIPT_DIR/s#SUBST_SCRIPT_DIR#$(SCRIPTINSTALL)#' \
 	-e '/SUBST_BIN_DIR/s#SUBST_BIN_DIR#$(QFLOWEXECPATH)#' \
+	-e '/HAVE_OPENTIMER/s#HAVE_OPENTIMER#$(HAVE_OPENTIMER)#' \
+	-e '/HAVE_OPENSTA/s#HAVE_OPENSTA#$(HAVE_OPENSTA)#' \
 	-e '/ENV_PATH/s#ENV_PATH#$(ENV_PATH)#' $< > $@
 
 textreport.py: textreport.py.in

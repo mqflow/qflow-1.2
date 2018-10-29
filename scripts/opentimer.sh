@@ -11,7 +11,7 @@ if ($#argv < 2) then
 endif
 
 # Split out options from the main arguments
-set argline=(`getopt "d" $argv[1-]`)
+set argline=(`getopt "ad" $argv[1-]`)
 
 set options=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $1}'`
 set cmdargs=`echo "$argline" | awk 'BEGIN {FS = "-- "} END {print $2}'`
@@ -28,16 +28,21 @@ else
    echo       <source_name> is the root name of the verilog file
    echo	      [options] are:
    echo			-d	use delay file to back-annotate wire delays
+   echo			-a	append to log file (do not overwrite)
    echo
    exit 1
 endif
 
 set dodelays=0
+set append=0
 
 foreach option (${argline})
    switch (${option})
       case -d:
          set dodelays=1
+         breaksw
+      case -a:
+         set append=1
          breaksw
       case --:
          break
@@ -85,11 +90,16 @@ rm -f ${logdir}/migrate.log >& /dev/null
 rm -f ${logdir}/drc.log >& /dev/null
 rm -f ${logdir}/lvs.log >& /dev/null
 rm -f ${logdir}/gdsii.log >& /dev/null
-rm -f ${synthlog} >& /dev/null
-touch ${synthlog}
 set date=`date`
-echo "Qflow static timing analysis logfile created on $date" > ${synthlog}
 
+if ( $append == 0 ) then
+   rm -f ${synthlog} >& /dev/null
+   touch ${synthlog}
+   echo "Qflow static timing analysis logfile created on $date" > ${synthlog}
+else
+   touch ${synthlog}
+   echo "\nQflow static timing analysis logfile appended on $date" >> ${synthlog}
+endif
 
 # Check if last line of log file says "error condition"
 set errcond = `tail -1 ${lastlog} | grep "error condition" | wc -l`
@@ -171,7 +181,8 @@ if ($dodelays == 1) then
        # Translate <, >, and $ in file to _ to match the verilog.
        if ( -f ${synthdir}/${rootname}.spef ) then
 	  cat ${synthdir}/${rootname}.spef | sed \
-		-e 's/\$/_/g' -e 's/</_/g' -e 's/>/_/g' -e 's/\./_/g' \
+		-e 's/\$/_/g' -e 's/</_/g' -e 's/>/_/g' \
+		-e '/^\*[0-9]/s/\./_/g' \
 		> ${synthdir}/${rootname}.spefx
 	  mv ${synthdir}/${rootname}.spefx ${synthdir}/${rootname}.spef
        endif
