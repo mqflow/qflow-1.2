@@ -228,7 +228,15 @@ cat > ${rootname}.conf << EOF
 read_celllib -min ${libertyminpath}
 read_celllib -max ${libertymaxpath}
 read_verilog ${rootname}.rtlbb.v
+EOF
+
+if ( $dodelays == 1 ) then
+   cat >> ${rootname}.conf << EOF
 read_spef ${rootname}.spef
+EOF
+endif
+
+cat >> ${rootname}.conf << EOF
 read_sdc ${rootname}.sdc
 report_timing 
 report_path -num_paths 10000

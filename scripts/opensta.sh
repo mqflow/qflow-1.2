@@ -227,7 +227,15 @@ read_liberty -min ${libertyminpath}
 read_liberty -max ${libertymaxpath}
 read_verilog ${rootname}.rtlnopwr.v
 link_design ${rootname}
+EOF
+
+if ($dodelays == 1) then
+    cat >> ${rootname}.conf << EOF
 read_sdf ${rootname}.sdf
+EOF
+endif
+
+cat >> ${rootname}.conf << EOF
 read_sdc ${rootname}.sdc
 check_setup
 report_annotated_check
