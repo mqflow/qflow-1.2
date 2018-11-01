@@ -261,6 +261,15 @@ if (${scripting} == "T") then
 		${synthdir}/${rootname}.rtlnopwr.anno.v \
 		${synthdir}/${rootname}.anno.spc ${spicepath} \
 		${synthdir}/${rootname}_powerground |& tee -a ${synthlog}
+
+      set errcond = $status
+      if ( ${errcond} != 0 ) then
+         echo "annotate.tcl failed with exit status ${errcond}" |& tee -a ${synthlog}
+         echo "Premature exit." |& tee -a ${synthlog}
+         echo "Synthesis flow stopped on error condition." >>& ${synthlog}
+         exit 1
+      endif
+
       # If the antenna.out file contained only unfixed errors, then
       # the annotated output files may not exist, so check.
       if ( -f ${synthdir}/${rootname}.rtlnopwr.anno.v ) then

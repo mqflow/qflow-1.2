@@ -79,7 +79,7 @@ set debug false
 
 if [catch {open $antennaname r} fant] {
    puts stderr "Error: can't open file $antennaname for input"
-   return
+   exit 1
 }
 
 #-----------------------------------------------------------------
@@ -114,7 +114,7 @@ while {[gets $fant line] >= 0} {
 }
 if {$added == 0} {
    puts stdout "No nets needed annotating."
-   return
+   exit 0
 }
 
 close $fant	;# Done with antenna input file
@@ -125,12 +125,12 @@ close $fant	;# Done with antenna input file
 
 if [catch {open $vlogname r} fvlog] {
    puts stderr "Error: can't open file $vlogname for input"
-   return
+   exit 1
 }
 
 if [catch {open $vlogoutname w} fvout] {
    puts stderr "Error: can't open file $vlogoutname for output"
-   return
+   exit 1
 }
 
 while {[gets $fvlog line] >= 0} {
@@ -163,13 +163,13 @@ if {${vlog2name} != ${vlogname}} {
 
    if [catch {open $vlog2name r} fvlog] {
       puts stderr "Error: can't open file $vlog2name for input"
-      return
+      exit 1
    }
 
    set vlog2outname [regsub {rtlnopwr} $vlogoutname rtl]
    if [catch {open $vlog2outname w} fvout] {
       puts stderr "Error: can't open file $vlogout2name for output"
-      return
+      exit 1
    }
 
    while {[gets $fvlog line] >= 0} {
@@ -203,13 +203,13 @@ if {${vlog3name} != ${vlogname}} {
 
    if [catch {open $vlog3name r} fvlog] {
       puts stderr "Error: can't open file $vlog3name for input"
-      return
+      exit 1
    }
 
    set vlog3outname [regsub {rtlnopwr} $vlogoutname rtlbb]
    if [catch {open $vlog3outname w} fvout] {
       puts stderr "Error: can't open file $vlogout3name for output"
-      return
+      exit 1
    }
 
    while {[gets $fvlog line] >= 0} {
@@ -239,19 +239,19 @@ if {${vlog3name} != ${vlogname}} {
 
 if [catch {open $spicename r} fspi] {
    puts stderr "Error: can't open file $spicename for input"
-   return
+   exit 1
 }
 
 if {$spicelibname != ""} {
    if [catch {open $spicelibname r} fslib] {
       puts stderr "Error: can't open file $spicelibname for input"
-      return
+      exit 1
    }
 }
 
 if [catch {open $spiceoutname w} fsout] {
    puts stderr "Error: can't open file $spiceoutname for output"
-   return
+   exit 1
 }
 
 # Compile the list of antenna cells used (possibly there is only one)
@@ -344,3 +344,4 @@ close $fspi
 close $fsout
 
 puts stdout "Done with annotate.tcl"
+exit 0
