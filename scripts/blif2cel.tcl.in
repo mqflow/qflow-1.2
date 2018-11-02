@@ -27,6 +27,8 @@
 #		that value.  Optional.
 #
 #
+# Exit code:  0 on success, 1 on failure.
+#
 # NOTE:	Cells must be placed relative to the LEF bounding box during
 #	physical placement!
 #
@@ -86,7 +88,7 @@ while {$index < $arglen} {
 
 	default  {
 	    puts stderr "All arguments must have option switches."
-	    exit
+	    exit 1
 	}
     }
     incr index
@@ -98,7 +100,7 @@ if {[llength args(lefs)] > 0} {
     set leffiles $args(lefs)
 } else {
     puts stderr "No LEF files defined!"
-    exit
+    exit 1
 }
 
 if {[info exists args(blif)]} {
@@ -106,14 +108,14 @@ if {[info exists args(blif)]} {
     set cellname [file rootname [file tail $bliffile]]
 } else {
     puts stderr "No BLIF file defined"
-    exit
+    exit 1
 }
 
 if {[info exists args(cel)]} {
 	set celfile $args(cel)
 } else {
     puts stderr "No CEL file defined"
-    exit
+    exit 1
 }
 
 
@@ -136,14 +138,14 @@ set leffiles $fulllef
 
 if [catch {open $bliffile r} fnet] {
     puts stderr "Error: can't open file $bliffile for reading!"
-    exit 0
+    exit 1
 } else {
     puts "Opened BLIF file ($bliffile) for reading ..."
 }
 
 if [catch {open $celfile w} fcel] {
     puts stderr "Error: can't open file $celfile for writing!"
-    exit 0
+    exit 1
 } else {
     puts "Opened CEL file ($celfile) for writing..."
 }
@@ -152,7 +154,7 @@ set fhardmacros {}
 foreach hardmacro $hardmacros {
     if [catch {open $hardmacro r} fhardmacro_tmp] {
 	puts stderr "Error: can't open file $hardmacro for reading!"
-	exit 0
+	exit 1
     } else {
 	puts "Loaded $hardmacro file for reading..."
 	lappend fhardmacros $fhardmacro_tmp
@@ -163,7 +165,7 @@ set flefs {}
 foreach leffile $leffiles {
     if [catch {open $leffile r} flef_tmp] {
 	puts stderr "Error: can't open file $leffile for reading!"
-	exit 0
+	exit 1
     } else {
 	puts "Loaded $leffile file for reading..."
 	lappend flefs $flef_tmp
@@ -785,3 +787,4 @@ while {[gets $fnet line] >= 0} {
 }
 
 puts stdout "Done!"
+exit 0
