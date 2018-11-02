@@ -446,7 +446,7 @@ endif
 #---------------------------------------------------
 
 # Remove any existing .obs file as place2def.tcl will append to it.
-rm ${rootname}.obs
+rm -f ${rootname}.obs
 
 if ( (-f ${rootname}.cel1) && (-f ${scriptdir}/removeblocks.tcl) ) then
 
