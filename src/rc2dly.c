@@ -688,13 +688,15 @@ int main (int argc, char* argv[]) {
 		// another open parenthesis.  The net name is not a node
 		// but gets its own name identifier.
 		if ((dptr = strrchr(tokens[0], '/')) != NULL)
-		    *dptr = delimiter;
+		    *dptr = '\0';
+		// Note:  Delimiter and pin not part of mapped name, as some
+		// parsers do not accept that (#$@! wishy-washy spec).
 	        fprintf(outfile, "*%d %s\n", nid++, tokens[0]);
                 num_net_drivers = atoi(tokens[1]);
 		for (t = 2; t < num_net_drivers + 2; t++)  {
 	            if (strncmp(tokens[t], "PIN/", 4)) {
 			if ((dptr = strrchr(tokens[t], '/')) != NULL)
-			    *dptr = delimiter;
+			    *dptr = '\0';
 			fprintf(outfile, "*%d %s\n", nid++, tokens[t]);
 		    }
 		}
@@ -703,7 +705,7 @@ int main (int argc, char* argv[]) {
 	                if (strcmp(tokens[t + 3], "("))
 			    if (strncmp(tokens[t + 3], "PIN/", 4)) {
 				if ((dptr = strrchr(tokens[t + 3], '/')) != NULL)
-				    *dptr = delimiter;
+				    *dptr = '\0';
 				fprintf(outfile, "*%d %s\n", nid++, tokens[t + 3]);
 			    }
 		}
@@ -791,6 +793,7 @@ int main (int argc, char* argv[]) {
     int num_rxers = 0;
     int t = 0;
     Cell *cell;
+    char *pname;
     node_item_ptr tmp_nip = NULL;
 
     num_net_drivers = 0;
@@ -850,8 +853,11 @@ int main (int argc, char* argv[]) {
 			// If driver name is a pin then the name ID is the net name ID
 			if (!strncmp(tokens[2], "PIN/", 4))
 			    snprintf(currnode->mapped, 12, "*%d", net_idx);
-			else
-			    snprintf(currnode->mapped, 12, "*%d", nid++);
+			else {
+			    pname = strrchr(tokens[2], '/') + 1;
+			    snprintf(currnode->mapped, 12, "*%d%c%s", nid++,
+					delimiter, pname);
+			}
 
                         if (verbose > 1) print_node(currnode);
 
@@ -948,8 +954,11 @@ int main (int argc, char* argv[]) {
 		    // If driver name is a pin then the name ID is the net name ID
 		    if (!strncmp(tokens[t], "PIN/", 4))
 			snprintf(currnode->mapped, 12, "*%d", net_idx);
-		    else
-			snprintf(currnode->mapped, 12, "*%d", nid++);
+		    else {
+			pname = strrchr(tokens[t], '/') + 1;
+			snprintf(currnode->mapped, 12, "*%d%c%s", nid++, delimiter,
+					pname);
+		    }
 
                     if (verbose > 1) print_node(currnode);
                     name = calloc(1, sizeof(char) * (strlen(tokens[0]) + 10));
