@@ -801,6 +801,9 @@ else
       # Add paths to liberty files for any hard macros
       set libertyoption="-p ${libertypath}"
       if ( ${?hard_macros} ) then
+         # Do not use the standard cell separator on hard macros!
+	 # Option "-S" sets the separator to null.
+	 set libertyoption="${libertyoption} -S"
 	 foreach macro_path ( $hard_macros )
 	    foreach file ( `ls ${sourcedir}/${macro_path}` )
 	       if ( ${file:e} == "lib" ) then
@@ -812,7 +815,7 @@ else
 
       echo "Running blifFanout (iterative)" |& tee -a ${synthlog}
       echo "Each iteration calls:" |& tee -a ${synthlog}
-      echo "blifFanout ${fanout_options} -I ${modulename}_nofanout ${libertyoption} ${sepoption} ${bufoption} tmp.blif ${modulename}.blif" |& tee -a ${synthlog}
+      echo "blifFanout ${fanout_options} -I ${modulename}_nofanout ${sepoption} ${libertyoption} ${bufoption} tmp.blif ${modulename}.blif" |& tee -a ${synthlog}
       echo "" >> ${synthlog}
 
       set nchanged=1000

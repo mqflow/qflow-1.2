@@ -528,6 +528,8 @@ foreach flef $flefs {
 	    set matches 0
 	    if [regexp {[ \t]*NAMESCASESENSITIVE} $line lmatch] {
 		incr matches
+	    } elseif [regexp {[ \t]*NOWIREEXTENSIONATPIN} $line lmatch] {
+		incr matches
 	    } elseif [regexp {[ \t]*VERSION} $line lmatch] {
 		incr matches
 	    } elseif [regexp {[ \t]*BUSBITCHARS} $line lmatch] {

@@ -85,15 +85,12 @@ char *buf_in_pin = NULL;
 char *clkbuf_in_pin = NULL;
 char *buf_out_pin = NULL;
 char *clkbuf_out_pin = NULL;
-char *Gatepath = NULL;
 char *Ignorepath = NULL;
-char *Separator = NULL;
 char SuffixIsNumeric;
 int  GatePrintFlag = 0;
 int  NodePrintFlag = 0;
 int  VerboseFlag = 0;
 int  skip_eol = 0;
-static char default_sep = '\0';
 
 int  Topfanout = 0;
 int  Inputfanout = 0;
@@ -121,6 +118,7 @@ struct Gatelist {
    char   *gatename;
    Cell	  *gatecell;		
    char   *suffix;		// points to position in gatename, not allocated
+   char	  *separator;
    int	  num_inputs;
    double Cint;
    double delay;
@@ -147,7 +145,8 @@ struct Nodelist {
 struct hashlist *Nodehash[OBJHASHSIZE];
 
 struct Drivelist {
-   char *DriveType;	// Suffix name (e.g., "X1")
+   char *Separator;	// Separator (e.g., "X")
+   char *DriveType;	// Suffix name (e.g., "1")
    int NgatesIn;	// Number of gates with this suffix in input
    int NgatesOut;	// Number of gates with this suffix in output
 } Drivelist_;
@@ -166,7 +165,7 @@ enum states_ {NONE, INPUTS, OUTPUTS, GATENAME, PINNAME, INPUTNODE, CLOCKNODE,
 	OUTPUTNODE, ENDMODEL, ERROR};
 enum nodetype_ {UNKNOWN, INPUT, CLOCK, OUTPUT, INPUTPIN, OUTPUTPIN};
 
-int read_gate_file(char *gate_file_name);
+int read_gate_file(char *gate_file_name, char *separator);
 void read_ignore_file(char *ignore_file_name);
 struct Gatelist *GatelistAlloc();
 struct Nodelist *NodelistAlloc();
@@ -185,29 +184,35 @@ void count_gatetype(struct Gatelist *gl, int num_in, int num_out);
  * find_suffix ---
  *
  *	Given a gate name, return the part of the name corresponding to the
- *	suffix.  That is, find the last occurrance of the string Separator
- *	(global variable), and return a pointer to the following character.
+ *	suffix.  That is, find the last occurrance of the string separator
+ *	and return a pointer to the following character.  Note that a NULL
+ *	separator means there is no suffix, vs. an emptry string separator,
+ *	which means that the suffix encompasses all digits at the end of
+ *	the gate name.
  *---------------------------------------------------------------------------
  */
 
-char *find_suffix(char *gatename)
+char *find_suffix(char *gatename, char *separator)
 {
    char *tsuf, *gptr;
    char *suffix = NULL;
 
-   if (Separator == NULL || (*Separator == '\0')) {
+   if (separator == NULL) {
+      return NULL;
+   }
+   else if (*separator == '\0') {
       suffix = gatename + strlen(gatename) - 1;
       while (isdigit(*suffix)) suffix--;
       suffix++;
    }
    else {
       gptr = gatename;
-      while ((tsuf = strstr(gptr, Separator)) != NULL) {
+      while ((tsuf = strstr(gptr, separator)) != NULL) {
          suffix = tsuf;
          gptr = tsuf + 1;
       }
       if (suffix != NULL)
-	 suffix += strlen(Separator);
+	 suffix += strlen(separator);
    }
    return suffix;
 }
@@ -242,6 +247,11 @@ int is_buffer_func(char *func_text, char *pin_in, char *pin_out) {
    return 0;
 }
 
+typedef struct _gaterec {
+    char *path;			/* Path to library */
+    char *sep;			/* Gate name separator ("-" if none) */
+} GateRec;
+
 /*
  *---------------------------------------------------------------------------
  *---------------------------------------------------------------------------
@@ -249,26 +259,28 @@ int is_buffer_func(char *func_text, char *pin_in, char *pin_out) {
 
 int main (int argc, char *argv[])
 {
-   int i, j, k;
+   int i, j, k, l;
    int state;
    int maxline, curline;
+   int libcount;
    int inputcount;
    int gateinputs;
    int gatecount;
    int doLoadBalance = 1;
    int doFanout = 1;
    char *pinname;
-   char *libfile;
+   char *libfile, *libsep;
+   char *separg = NULL;
    char *test;
    char *s, *t, *comptr;
    FILE *infptr, *outfptr;
    char *line;
+   GateRec *Gatepaths = NULL;
    struct Gatelist *gl = NULL;
    struct Nodelist *nl = NULL, *nlmax, *nlimax;
    struct Drivelist *dl = NULL;
 
    SuffixIsNumeric = TRUE;	// By default, assume numeric suffixes
-   Separator = NULL;		// By default, assume no separator
 
    /* Note:  To-Do, have an option that sets the case-insensitive */
    /* hash & match functions.					  */
@@ -282,7 +294,7 @@ int main (int argc, char *argv[])
 
    fprintf(stdout, "blifFanout for qflow " QFLOW_VERSION "." QFLOW_REVISION "\n");
 
-   while ((i = getopt(argc, argv, "fLgnhvl:c:b:i:o:p:s:I:F:")) != EOF) {
+   while ((i = getopt(argc, argv, "fLSgnhvl:c:b:i:o:p:s:I:F:")) != EOF) {
       switch (i) {
 	 case 'b':
 	    /* If value is a comma-separated pair, the first is a	*/
@@ -311,13 +323,18 @@ int main (int argc, char *argv[])
 	    /* Allow multiple files to be specified as space-separated	*/
 	    /* list, either by specifying all on one "-p" arguments	*/
 	    /* or by passing multiple "-p" arguments.			*/
-	    if (Gatepath == NULL) {
-		Gatepath = strdup(optarg);
+
+	    if (Gatepaths == NULL) {
+		libcount = 1;
+		Gatepaths = (GateRec *)malloc(sizeof(GateRec));
+		Gatepaths->path = strdup(optarg);
+		Gatepaths->sep = (separg) ? strdup(separg) : NULL;
 	    }
 	    else {
-		Gatepath = (char *)realloc(Gatepath, strlen(optarg) +
-			strlen(Gatepath) + 2);
-		sprintf(Gatepath, "%s %s", Gatepath, optarg);
+		libcount++;
+		Gatepaths = (GateRec *)realloc(Gatepaths, libcount * sizeof(GateRec));
+		Gatepaths[libcount - 1].path = strdup(optarg);
+		Gatepaths[libcount - 1].sep = (separg) ? strdup(separg) : NULL;
 	    }
 	    break;
 	 case 'f':	// fanout only
@@ -339,7 +356,16 @@ int main (int argc, char *argv[])
 	    MaxOutputCap = atof(optarg);
 	    break;
 	 case 's':
-	    Separator = strdup(optarg);
+	    if (!strcasecmp(optarg, "none")) {
+	       if (separg) free(separg);
+	       separg = NULL;
+	    }
+	    else
+	       separg = strdup(optarg);
+	    break;
+	 case 'S':
+	    if (separg) free(separg);
+	    separg = NULL;
 	    break;
          case 'g':
 	    GatePrintFlag = 1;
@@ -358,6 +384,7 @@ int main (int argc, char *argv[])
 	    break;
       }
    }
+   if (separg) free(separg);
 
    /* If there is only one set of in and out pins, then assume	*/
    /* that the pin names apply to both regular and clock	*/
@@ -393,19 +420,21 @@ int main (int argc, char *argv[])
    i++;
 
    // Make sure we have a valid gate file path
-   if (Gatepath == NULL) {
-      fprintf(stderr, "blifFanout: No liberty file specified.\n");
+   if (Gatepaths == NULL) {
+      fprintf(stderr, "blifFanout: No liberty file(s) specified.\n");
       return 1;
    }
-   libfile = strtok(Gatepath, " ");
    gatecount = 0;
-   while (libfile != NULL) {
-      gatecount += read_gate_file(libfile);
-      libfile = strtok(NULL, " ");
+   for (l = 0; l < libcount; l++) {
+      int loccount;
+      libfile = Gatepaths[l].path;
+      libsep = Gatepaths[l].sep;
+      loccount = read_gate_file(libfile, libsep);
+      if (loccount == 0)
+         fprintf(stderr, "blifFanout:  Warning:  No gates found in file %s!\n",
+		libfile);
+      gatecount += loccount;
    }
-
-   // Make sure we have a non-NULL separator.
-   if (Separator == NULL) Separator = &default_sep;
 
    // Determine if suffix is numeric or alphabetic
    if (gatecount > 0) {
@@ -418,7 +447,7 @@ int main (int argc, char *argv[])
    }
 
    if (gatecount == 0) {
-      fprintf(stderr, "blifFanout:  No gates found in %s file!\n", Gatepath);
+      fprintf(stderr, "blifFanout:  No gates found in any input file!\n");
       return 1;
    }
    if (GatePrintFlag) {
@@ -719,7 +748,7 @@ int main (int argc, char *argv[])
    while (dl != NULL) {
       if (dl->NgatesIn > 0) {
 	 fprintf(stderr, "\t\"%s%s\" gates\tIn: %d    \tOut: %d    \t%+d\n",
-		Separator, dl->DriveType, dl->NgatesIn,
+		dl->Separator, dl->DriveType, dl->NgatesIn,
 		dl->NgatesOut, (dl->NgatesOut - dl->NgatesIn));
       }
       dl = (struct Drivelist *)HashNext(Drivehash);
@@ -782,7 +811,7 @@ void read_ignore_file(char *ignore_file_name)
  *---------------------------------------------------------------------------
  */
 
-int read_gate_file(char *gate_file_name)
+int read_gate_file(char *gate_file_name, char *separator)
 {
    int i, j, k, ind, format = -1;
    int gatecount;
@@ -795,11 +824,12 @@ int read_gate_file(char *gate_file_name)
    gatecount = 0;
    cells = read_liberty(gate_file_name, NULL);
    for (curcell = cells; curcell != NULL; curcell = curcell->next) {
-	if (curcell->name == NULL) continue;	/* "dont_use" cell */
+	if (curcell->name == NULL) continue;	/* undefined/unused cell */
 
 	gl = GatelistAlloc();
 	gl->gatename = strdup(curcell->name);
-	gl->suffix = find_suffix(gl->gatename);
+	gl->suffix = find_suffix(gl->gatename, separator);
+	gl->separator = separator;
 	gl->gatecell = curcell;
 
 	get_values(curcell, &gl->delay, &gl->Cint);
@@ -825,7 +855,8 @@ int read_gate_file(char *gate_file_name)
  	HashPtrInstall(gl->gatename, gl, Gatehash);
 	gatecount++;
 
-	/* Install prefix in Basehash */
+	/* Install prefix in Basehash.  Note that prefix contains the	*/
+	/* separator string, if any.					*/
 
 	if ((s = gl->suffix) == NULL)
 	    ind = strlen(gl->gatename);
@@ -867,7 +898,7 @@ struct Gatelist* GatelistAlloc()
 
    gl = (struct Gatelist*)malloc(sizeof(struct Gatelist));
    gl->gatename = NULL;
-   gl->suffix = 0;
+   gl->suffix = NULL;
    gl->num_inputs = 0;
    gl->Cint = 0.0;
    gl->delay = 0.0;
@@ -888,6 +919,7 @@ struct Drivelist *DrivelistAlloc()
    dl->NgatesIn = 0;
    dl->NgatesOut = 0;
    dl->DriveType = NULL;
+   dl->Separator = NULL;
    return dl;
 }
 
@@ -1025,6 +1057,7 @@ void count_gatetype(struct Gatelist *gl, int num_in, int num_out)
       dl = DrivelistAlloc();
       HashPtrInstall(s, dl, Drivehash);
       dl->DriveType = strdup(s);
+      dl->Separator = gl->separator;
    }
 
    dl->NgatesIn += num_in;	// Number of these gates before processing
