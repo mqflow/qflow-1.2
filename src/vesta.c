@@ -1643,7 +1643,8 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
                         fprintf(stderr, "Library not followed by name\n");
                     else
                         token = advancetoken(flib, ')');
-                    fprintf(stderr, "Parsing library \"%s\"\n", token);
+		    /* Diagnostic */
+                    fprintf(stdout, "Parsing library \"%s\"\n", token);
                     libname = strdup(token);
                     token = advancetoken(flib, 0);
                     if (strcmp(token, "{")) {

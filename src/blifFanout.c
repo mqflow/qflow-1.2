@@ -818,7 +818,7 @@ int read_gate_file(char *gate_file_name)
 	/* delays in each gate).					*/
 
 	// (Diagnostic, for debug)
-	// fprintf(stderr, "Parsing cell \"%s\", \"%s\", function \"%s\"\n",
+	// fprintf(stdout, "Parsing cell \"%s\", \"%s\", function \"%s\"\n",
 	//	gl->gatename, gl->gatecell->name, gl->gatecell->function);
 
 	gl->strength = MaxLatency / gl->delay;
@@ -1180,7 +1180,6 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 	       if (gl == NULL) {
 		  fprintf(stderr, "Error:  Gate \"%s\" is used in source "
 			"but has no liberty file definition.\n", t);
-		  fprintf(stderr, "Check if gate is designated \"dont_use\".\n");
 		  gateinputs = 0;
 	       }
 	       else

@@ -515,7 +515,8 @@ read_liberty(char *libfile, char *pattern)
 			fprintf(stderr, "Library not followed by name\n");
 		    else
 			token = advancetoken(flib, ')');
-		    fprintf(stderr, "Parsing library \"%s\"\n", token);
+		    /* Diagnostic */
+		    fprintf(stdout, "Parsing library \"%s\"\n", token);
 		    libname = strdup(token);
 		    token = advancetoken(flib, 0);
 		    if (strcmp(token, "{")) {
@@ -880,11 +881,14 @@ read_liberty(char *libfile, char *pattern)
 		break;
 
 	    case CELLDEF:
+		/* Note: "dont_use" is only handled in the case that
+		 * "pattern" is non-NULL;  this is a largely deprecated use.
+		 */
 
 		if (!strcmp(token, "}")) {
 		    section = LIBBLOCK;			// End of cell def
 		}
-		else if (!strcasecmp(token, "dont_use")) {
+		else if (!strcasecmp(token, "dont_use") && (pattern != NULL)) {
 		    token = advancetoken(flib, 0);	// Colon
 		    token = advancetoken(flib, ';');	// To end-of-statement
 		    if (!strcasecmp(token, "true")) {

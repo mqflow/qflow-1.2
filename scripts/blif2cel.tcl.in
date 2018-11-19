@@ -373,8 +373,8 @@ proc parse_layer {leffile layername} {
 proc parse_hard_macro {leffile macroname} {
     global $macroname units
 
-    # puts stderr "Parsing hard macro $macroname:  Ports are:"
-    puts stderr "Parsing hard macro $macroname"
+    # puts stdout "Parsing hard macro $macroname:  Ports are:"
+    puts stdout "Parsing hard macro $macroname"
     set ${macroname}(hard) true
     while {[gets $leffile line] >= 0} {
 	if [regexp {^[ \t]*#} $line lmatch] {
@@ -417,8 +417,8 @@ proc parse_hard_macro {leffile macroname} {
 proc parse_macro {leffile macroname} {
     global $macroname units units_used
 
-    # puts stderr "Parsing macro $macroname:  Ports are:"
-    puts stderr "Parsing macro $macroname"
+    # puts stdout "Parsing macro $macroname:  Ports are:"
+    puts stdout "Parsing macro $macroname"
     while {[gets $leffile line] >= 0} {
 	if [regexp {^[ \t]*#} $line lmatch] {
 	    # Comment line, ignore.
