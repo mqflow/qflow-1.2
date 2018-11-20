@@ -250,8 +250,16 @@ typedef struct _lutable {
     lutableptr next;
 } lutable;
 
+typedef struct _bustype *bustypeptr;
 typedef struct _pin *pinptr;
 typedef struct _cell *cellptr;
+
+typedef struct _bustype {
+    char *name;
+    int   from;
+    int   to;
+    bustypeptr next;
+} bus;
 
 typedef struct _pin {
     char *name;
@@ -1600,6 +1608,63 @@ int get_table_type(char *token) {
 }
 
 /*--------------------------------------------------------------*/
+/* Expand a bus into individual pins.				*/
+/*--------------------------------------------------------------*/
+
+void
+expand_buses(pin *curpin, bus *curbus, char *busformat)
+{
+    pin *newpin;
+    char *rootname;
+    int low, high, i;
+    char busbit[1024];
+
+    rootname = curpin->name;
+
+    if (curbus == NULL) {
+	fprintf(stderr, "Error:  Pin %s is a bus, but no bus definition exists!\n",
+			curpin->name);
+	return;
+    }
+    if (curbus->from > curbus->to) {
+	low = curbus->to;
+	high = curbus->from;
+    }
+    else {
+	low = curbus->from;
+	high = curbus->to;
+    }
+
+    for (i = low; i <= high; i++) {
+	sprintf(busbit, busformat, rootname, i);
+
+	if (i == low)
+	    newpin = curpin;
+	else
+	    newpin = (pin *)malloc(sizeof(pin));
+	newpin->name = strdup(busbit);
+	newpin->next = NULL;
+	if (i != low) {
+	    curpin->next = newpin;
+
+	    /* Copy all pin properties from the old pin to the new pin */
+	    newpin->type = curpin->type;
+	    newpin->capr = curpin->capr;
+	    newpin->capf = curpin->capf;
+	    newpin->sense = curpin->sense;
+	    newpin->transr = curpin->transr;
+	    newpin->transf = curpin->transf;
+	    newpin->propdelr = curpin->propdelr;
+	    newpin->propdelf = curpin->propdelf;
+	    newpin->refcell = curpin->refcell;
+
+	    curpin = newpin;
+	}
+    }
+    free(rootname);
+}
+
+/*--------------------------------------------------------------*/
 /* Read a liberty format file and collect information about     */
 /* the timing properties of each standard cell.                 */
 /*--------------------------------------------------------------*/
@@ -1620,14 +1685,19 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
     int i, j;
     double gval;
     char *iptr;
+    char *busformat;
     short timing_type, sense_type;
 
     lutable *newtable, *reftable;
     cell *newcell, *lastcell;
     pin *newpin;
+    bus *buses = NULL, *newbus, *curbus = NULL;
 
     lastcell = NULL;
     timing_type = UNKNOWN;
+
+    /* Set default bus format (verilog style) */
+    busformat = strdup("%s[%d]");
 
     /* Read tokens off of the line */
     token = advancetoken(flib, 0);
@@ -1955,6 +2025,54 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
                    }
                    token = advancetoken(flib, ';');
                 }
+		else if (!strcasecmp(token, "bus_naming_style")) {
+		    token = advancetoken(flib, 0);
+		    if (token == NULL) break;
+		    if (!strcmp(token, ":")) {
+			token = advancetoken(flib, 0);
+			if (token == NULL) break;
+		    }
+		    if (!strcmp(token, "\"")) {
+			token = advancetoken(flib, '\"');
+			if (token == NULL) break;
+		    }
+		    free(busformat);
+		    busformat = strdup(token);
+                    token = advancetoken(flib, ';');
+		}
+		else if (!strcasecmp(token, "type")) {
+		    newbus = (bus *)malloc(sizeof(bus));
+		    newbus->from = 0;
+		    newbus->to = 0;
+		    newbus->next = buses;
+		    buses = newbus;
+
+		    token = advancetoken(flib, 0);
+		    if (strcmp(token, "("))
+			fprintf(stderr, "Input missing open parenthesis.\n");
+		    else
+			token = advancetoken(flib, ')');
+		    newbus->name = strdup(token);
+		    while (*token != '}') {
+			token = advancetoken(flib, 0);
+			if (!strcasecmp(token, "bit_from")) {
+			    token = advancetoken(flib, 0);
+			    token = advancetoken(flib, ';');
+			    sscanf(token, "%d", &newbus->from);
+			}
+			else if (!strcasecmp(token, "bit_to")) {
+			    token = advancetoken(flib, 0);
+			    token = advancetoken(flib, ';');
+			    sscanf(token, "%d", &newbus->to);
+			}
+			else if (!strcasecmp(token, "{")) {
+			    /* All entries are <name> : <value> */
+			    /* Ignore unhandled tokens.		*/
+			    token = advancetoken(flib, 0);
+			    token = advancetoken(flib, ';');
+			}
+		    }
+		}
                 else {
                     // For unhandled tokens, read in tokens.  If it is
                     // a definition or function, read to end-of-line.  If
@@ -1979,7 +2097,8 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
                 if (!strcmp(token, "}")) {
                     section = LIBBLOCK;                 // End of cell def
                 }
-                else if (!strcasecmp(token, "pin")) {
+                else if (!strcasecmp(token, "pin") ||
+			 !strcasecmp(token, "bus")) {
                     token = advancetoken(flib, 0);      // Open parens
                     if (!strcmp(token, "("))
                         token = advancetoken(flib, ')');        // Close parens
@@ -2107,6 +2226,9 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
 
 		if (debug == 2) fprintf(stdout, "PINDEF: %s\n", token);
                 if (!strcmp(token, "}")) {
+		    if (curbus != NULL)
+			expand_buses(newpin, curbus, busformat);
+		    curbus = NULL;
                     section = CELLDEF;                  // End of pin def
                 }
                 else if (!strcasecmp(token, "capacitance")) {
@@ -2143,6 +2265,17 @@ libertyRead(FILE *flib, lutable **tablelist, cell **celllist)
                             fprintf(stderr, "Expected end-of-statement.\n");
                     }
                 }
+		else if (!strcasecmp(token, "bus_type")) {
+                    token = advancetoken(flib, 0);      // Colon
+                    token = advancetoken(flib, ';');
+		    /* Find the bus definition */
+		    for (curbus = buses; curbus; curbus = curbus->next)
+			if (!strcmp(curbus->name, token))
+			    break;
+		    if (curbus == NULL)
+			fprintf(stderr, "Failed to find a valid bus type \"%s\"\n",
+				token);
+		}
                 else if (!strcasecmp(token, "direction")) {
                     token = advancetoken(flib, 0);      // Colon
                     token = advancetoken(flib, ';');
@@ -3632,8 +3765,8 @@ main(int objc, char *argv[])
        }
     }
 
-    if (objc - firstarg != 2) {
-        fprintf(stderr, "Usage:  vesta [options] <name.v> <name.lib>\n");
+    if (objc - firstarg < 2) {
+        fprintf(stderr, "Usage:  vesta [options] <name.v> <name.lib> [...]\n");
         fprintf(stderr, "Options:\n");
         fprintf(stderr, "--delay <delay_file>   or      -d <delay_file>\n");
         fprintf(stderr, "--period <period>      or      -p <period>\n");
@@ -3662,12 +3795,6 @@ main(int objc, char *argv[])
         exit (1);
     }
 
-    flib = fopen(argv[firstarg + 1], "r");
-    if (flib == NULL) {
-        fprintf(stderr, "Cannot open %s for reading\n", argv[firstarg + 1]);
-        exit (1);
-    }
-
     /*------------------------------------------------------------------*/
     /* Generate one table template for the "scalar" case                */
     /*------------------------------------------------------------------*/
@@ -3691,14 +3818,29 @@ main(int objc, char *argv[])
     tables = scalar;
 
     /*------------------------------------------------------------------*/
-    /* Read the liberty format file.  This is not a rigorous parser!    */
+    /* Read all liberty format files (everything on the command line	*/
+    /* after the verilog source file).					*/
     /*------------------------------------------------------------------*/
 
-    fileCurrentLine = 0;
-    libertyRead(flib, &tables, &cells);
-    fflush(stdout);
-    fprintf(stdout, "Lib Read:  Processed %d lines.\n", fileCurrentLine);
-    if (flib != NULL) fclose(flib);
+    for (i = 1; firstarg + i < objc; i++) {
+
+	flib = fopen(argv[firstarg + i], "r");
+	if (flib == NULL) {
+	    fprintf(stderr, "Cannot open %s for reading\n", argv[firstarg + i]);
+	    exit (1);
+	}
+
+	/*------------------------------------------------------------------*/
+	/* Read the liberty format file.  This is not a rigorous parser!    */
+	/*------------------------------------------------------------------*/
+
+	fileCurrentLine = 0;
+	libertyRead(flib, &tables, &cells);
+	fflush(stdout);
+	fprintf(stdout, "Lib read %s:  Processed %d lines.\n", argv[firstarg + i],
+			fileCurrentLine);
+	if (flib != NULL) fclose(flib);
+    }
 
     /*--------------------------------------------------*/
     /* Debug:  Print summary of liberty database        */

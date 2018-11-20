@@ -443,6 +443,66 @@ pattern_match(char *name, char *pattern)
 }
 
 /*--------------------------------------------------------------*/
+/* Expand a bus into individual pins				*/
+/*								*/
+/* Return the last pin generated.				*/
+/*--------------------------------------------------------------*/
+
+Pin *
+expand_buses(Pin *curpin, BUStype *curbus, char *busformat)
+{
+    Pin *newpin;
+    char *rootname;
+    int low, high, i;
+    char busbit[1024];
+
+    rootname = curpin->name;
+
+    if (curbus == NULL) {
+	fprintf(stderr, "Error:  Pin %s is a bus, but no bus definition exists!\n",
+		curpin->name);
+	return curpin;
+    }
+    if (curbus->from > curbus->to) {
+	low = curbus->to;
+	high = curbus->from;
+    }
+    else {
+	low = curbus->from;
+	high = curbus->to;
+    }
+
+    /* To do:  Rigorous parsing of busformat.  Assumes that it contains */
+    /* a "%s" followed by "%d".  This is true of all bus formats I can	*/
+    /* think of.  However, that does not mean that it may not have a	*/
+    /* syntax error.							*/
+
+    for (i = low; i <= high; i++) {
+	sprintf(busbit, busformat, rootname, i);
+
+	if (i == low)
+	    newpin = curpin;
+	else
+	    newpin = (Pin *)malloc(sizeof(Pin));
+	newpin->name = strdup(busbit);
+	newpin->next = NULL;
+	if (i != low) {
+	    curpin->next = newpin;
+
+	    /* Copy all pin properties from the old pin to the new pin */
+	    newpin->type = curpin->type;
+	    newpin->cap = curpin->cap;
+	    newpin->maxtrans = curpin->maxtrans;
+	    newpin->maxcap = curpin->maxcap;
+
+	    curpin = newpin;
+	}
+    } 
+    free(rootname);
+    return newpin;
+}
+
+/*--------------------------------------------------------------*/
 /* Read the liberty file and generate the cell database		*/
 /* If "pattern" is non-NULL, then use the pattern to filter the	*/
 /* cell results.						*/
@@ -456,7 +516,7 @@ read_liberty(char *libfile, char *pattern)
     char *libname = NULL;
     int section = INIT;
     LUTable *tables = NULL;
-    BUStype *buses = NULL;
+    BUStype *buses = NULL, *curbus = NULL;
     Cell *cells = NULL;
 
     double time_unit = 1.0;	// Time unit multiplier, to get ps
@@ -467,7 +527,7 @@ read_liberty(char *libfile, char *pattern)
     char *iptr;
 
     LUTable *newtable, *reftable, *scalar;
-    BUStype *newbus, *refbus;
+    BUStype *newbus;
     Cell *newcell, *lastcell;
     Pin *newpin, *lastpin;
     char *curfunc;
@@ -496,6 +556,10 @@ read_liberty(char *libfile, char *pattern)
 
     scalar->next = NULL;
     tables = scalar;
+
+    /* Set default bus format (verilog style) */
+
+    busformat = strdup("%s[%d]");
 
     /* Read the file.  This is not a rigorous parser! */
 
@@ -713,7 +777,6 @@ read_liberty(char *libfile, char *pattern)
 		    if (strcmp(token, "{"))
 			fprintf(stderr, "Error: failed to find start of block\n");
 		    newcell->reftable = NULL;
-		    newcell->bustype = NULL;
 		    newcell->function = NULL;
 		    newcell->pins = NULL;
 		    newcell->area = 1.0;
@@ -826,6 +889,7 @@ read_liberty(char *libfile, char *pattern)
 		      token = advancetoken(flib, '\"');
 		      if (token == NULL) break;
 		   }
+		   free(busformat);
 		   busformat = strdup(token);
 		   token = advancetoken(flib, ';');
 		}
@@ -906,23 +970,31 @@ read_liberty(char *libfile, char *pattern)
 		    token = advancetoken(flib, 0);	// Open parens
 		    if (!strcmp(token, "("))
 			token = advancetoken(flib, ')');	// Close parens
-		    newpin = (Pin *)malloc(sizeof(Pin));
-		    newpin->name = strdup(token);
 
-		    newpin->next = NULL;
-		    if (lastpin != NULL)
-			lastpin->next = newpin;
-		    else
-			newcell->pins = newpin;
-		    lastpin = newpin;
+		    /* Allow the liberty file to define a pin more than once.	*/
+		    /* This may be done to redefine properties of one pin in a	*/
+		    /* bus, for example.					*/
+
+		    newpin = get_pin_by_name(newcell, token);
+		    if (newpin == NULL) {
+			newpin = (Pin *)malloc(sizeof(Pin));
+			newpin->name = strdup(token);
+			newpin->next = NULL;
+		
+			if (lastpin != NULL)
+			    lastpin->next = newpin;
+			else
+			    newcell->pins = newpin;
+			lastpin = newpin;
+			newpin->type = PIN_UNKNOWN;
+			newpin->cap = 0.0;
+			newpin->maxcap = 0.0;
+			newpin->maxtrans = 0.0;
+		    }
 
 		    token = advancetoken(flib, 0);	// Find start of block
 		    if (strcmp(token, "{"))
 			fprintf(stderr, "Error: failed to find start of block\n");
-		    newpin->type = PIN_UNKNOWN;
-		    newpin->cap = 0.0;
-		    newpin->maxcap = 0.0;
-		    newpin->maxtrans = 0.0;
 		    section = PINDEF;
 		}		
 		else if (!strcasecmp(token, "area")) {
@@ -951,6 +1023,9 @@ read_liberty(char *libfile, char *pattern)
 	    case PINDEF:
 
 		if (!strcmp(token, "}")) {
+		    if (curbus != NULL)
+			lastpin = expand_buses(lastpin, curbus, busformat);
+		    curbus = NULL;
 		    section = CELLDEF;			// End of pin def
 		}
 		else if (!strcasecmp(token, "capacitance")) {
@@ -980,15 +1055,12 @@ read_liberty(char *libfile, char *pattern)
 		    token = advancetoken(flib, 0);	// Colon
 		    token = advancetoken(flib, ';');
 		    /* Find the bus */
-		    for (refbus = buses; refbus; refbus = refbus->next)
-			if (!strcmp(refbus->name, token))
+		    for (curbus = buses; curbus; curbus = curbus->next)
+			if (!strcmp(curbus->name, token))
 			    break;
-		    if (refbus == NULL)
+		    if (curbus == NULL)
 			fprintf(stderr, "Failed to find a valid bus type \"%s\"\n",
 				token);
-		    else if (newcell->bustype == NULL) {
-			newcell->bustype = refbus;
-		    }
 		}
 		else if (!strcasecmp(token, "direction")) {
 		    token = advancetoken(flib, 0);	// Colon
@@ -1351,32 +1423,6 @@ get_pincap(Cell *curcell, char *pinname, double *retcap)
 
 /*--------------------------------------------------------------------*/
 
-int
-get_pintype(Cell *curcell, char *pinname)
-{
-    Pin *curpin;
-    char *buschar = NULL;
-
-    /* Is pin part of a bus?  If so, return the root pin */
-    if (curcell->bustype != NULL) {
-	/* Not checking bounds or syntax;  blif requires <...> */
-	buschar = strrchr(pinname, '<');
-	if (buschar != NULL) *buschar = '\0';
-    }
-
-    for (curpin = curcell->pins; curpin; curpin = curpin->next) {
-	if (!strcmp(curpin->name, pinname)) {
-	    if (buschar != NULL) *buschar = '<';
-	    return curpin->type;
-	}
-    }
-
-    if (buschar != NULL) *buschar = '<';
-    return PIN_UNKNOWN;
-}
-
-/*--------------------------------------------------------------------*/
-
 Cell *
 get_cell_by_name(Cell *cell, char *name)
 {
@@ -1408,6 +1454,8 @@ get_cell_by_name(Cell *cell, char *name)
     return NULL;
 }
 
+/*--------------------------------------------------------------------*/
+
 Pin *
 get_pin_by_name(Cell *curcell, char *pinname)
 {
@@ -1419,9 +1467,24 @@ get_pin_by_name(Cell *curcell, char *pinname)
             return curpin;
         }
     }
-    printf("did not find pin %s\n", pinname);
     return NULL;
 }
+
+/*--------------------------------------------------------------------*/
+
+int
+get_pintype(Cell *curcell, char *pinname)
+{
+    Pin *curpin = get_pin_by_name(curcell, pinname);
+    if (curpin != NULL)
+	return curpin->type;
+    else {
+	printf("Error: did not find pin %s\n", pinname);
+	return PIN_UNKNOWN;
+    }
+}
+
+/*--------------------------------------------------------------------*/
 
 void delete_Cell(Cell *cell) {
     Pin *curpin = cell->pins;

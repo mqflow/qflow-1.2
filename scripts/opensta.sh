@@ -141,6 +141,20 @@ else
    endif
 endif
 
+# Add hard macros
+
+hardmacrolibs = ""
+if ( ${?hard_macros} ) then
+   foreach macro_path ( $hard_macros )
+      foreach file ( `ls ${sourcedir}/${macro_path}` )
+         if ( ${file:e} == "lib" ) then
+            set hardmacrolibs="${hardmacrolibs} ${sourcedir}/${macro_path}/${file}"
+         endif
+         break
+      end
+   end
+endif
+
 #----------------------------------------------------------
 # Done with initialization
 #----------------------------------------------------------
@@ -225,6 +239,15 @@ echo "Creating OpenSTA input file ${rootname}.conf" |& tee -a ${synthlog}
 cat > ${rootname}.conf << EOF
 read_liberty -min ${libertyminpath}
 read_liberty -max ${libertymaxpath}
+EOF
+
+foreach libpath ( $hardmacrolibs )
+   cat >> ${rootname}.conf << EOF
+read_celllib ${libpath}
+EOF
+end
+
+cat >> ${rootname}.conf << EOF
 read_verilog ${rootname}.rtlnopwr.v
 link_design ${rootname}
 EOF

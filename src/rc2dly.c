@@ -478,9 +478,9 @@ int main (int argc, char* argv[]) {
 
     double modulePinCapacitance = 0;
 
-    Cell *cells, *newcell;
+    Cell *cells = NULL, *newcell, *libcells;
     Pin *newpin;
-    char* libfilename;
+    char* libfilename = NULL;
     char* nodenameptr;
     char* design = NULL;
     char* dotptr = NULL;
@@ -562,11 +562,25 @@ int main (int argc, char* argv[]) {
 
             case 'l':
                 libfile = fopen(optarg, "r");
+		if (libfilename) free(libfilename);
                 libfilename = strdup(optarg);
 
                 if (!libfile) {
-                    fprintf(stderr, "ERROR: Unable to open input Liberty Timing file`%s': %s\n", optarg, strerror(errno));
+                    fprintf(stderr, "ERROR: Unable to open input Liberty "
+				"timing file`%s': %s\n", optarg, strerror(errno));
                 }
+		else {
+		    // Read in Liberty file
+		    printf("Reading Liberty timing file %s\n", libfilename);
+		    libcells = read_liberty(libfilename, 0);
+		    fclose(libfile);
+		    if (cells == NULL)
+			cells = libcells;
+		    else {
+			for (newcell = cells; newcell->next; newcell = newcell->next);
+			newcell->next = libcells;
+		    }
+		}
                 break;
 
             case 'd':
@@ -576,7 +590,8 @@ int main (int argc, char* argv[]) {
                     outfile = fopen(optarg, "w");
                 }
                 if (!outfile) {
-                    fprintf(stderr, "ERROR: Unable to open outfile`%s': %s\n", optarg, strerror(errno));
+                    fprintf(stderr, "ERROR: Unable to open output file `%s': "
+				"%s\n", optarg, strerror(errno));
                 }
 		else {
 		    dotptr = strrchr(optarg, '.');
@@ -610,17 +625,16 @@ int main (int argc, char* argv[]) {
         fprintf(stderr, "ERROR: Must specify input RC file.\n");
         return 1;
     }
-    if (libfile == NULL) {
-        fprintf(stderr, "ERROR: Must specify input Liberty Timing file.\n");
+
+    if (libfilename == NULL) {
+        fprintf(stderr, "ERROR: Must specify at least one input Liberty timing file.\n");
         return 1;
     }
-    fclose(libfile);
 
-    // Read in Liberty File
-    printf("Reading Liberty file %s\n", libfilename);
-    cells = read_liberty(libfilename, 0);
-
-    if (cells == NULL) return 5;
+    if (cells == NULL) {
+        fprintf(stderr, "ERROR: No cells were read from Liberty timing files.\n");
+	return 5;
+    }
 
     if (verbose > 3) {
         for (newcell = cells; newcell; newcell = newcell->next) {

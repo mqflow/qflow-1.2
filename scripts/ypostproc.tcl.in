@@ -97,7 +97,7 @@ if {$argc == 5} {
 #-------------------------------------------------------------
 
 while {[gets $bnet line] >= 0} {
-   set line [string map {\[ \< \] \>} $line]
+   # set line [string map {\[ \< \] \>} $line]
    if [regexp {^.names[ \t]+([^ \t]+)[ \t]+([^ \t]+)[ \t]*$} $line lmatch signame sigalias] {
       # Technically, should check if the next line is "1 1" but I don't think there are
       # any exceptions in yosys output.
@@ -118,7 +118,8 @@ seek $bnet 0
 
 set cycle 0
 while {[gets $bnet line] >= 0} {
-   set line [string map {\[ \< \] \> \.subckt \.gate} $line]
+   # set line [string map {\[ \< \] \> \.subckt \.gate} $line]
+   set line [string map {\.subckt \.gate} $line]
    if [regexp {^.gate} $line lmatch] {
       break
    } elseif [regexp {^.names} $line lmatch] {
@@ -162,7 +163,8 @@ while {1} {
    }
 
    if {[gets $bnet line] < 0} break
-   set line [string map {\[ \< \] \> \.subckt \.gate} $line]
+   # set line [string map {\[ \< \] \> \.subckt \.gate} $line]
+   set line [string map {\.subckt \.gate} $line]
 }
 
 close $bnet

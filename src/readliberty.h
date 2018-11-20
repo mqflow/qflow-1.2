@@ -80,7 +80,6 @@ typedef struct _cell {
     double slope;
     double mintrans;
     LUTable *reftable;
-    BUStype *bustype;
     double *times;	// Local values for time indexes, if given
     double *caps;	// Local values for cap indexes, if given
     double *values;	// Matrix of all values

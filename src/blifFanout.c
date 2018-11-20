@@ -1029,7 +1029,7 @@ void registernode(char *nodename, int type, struct Gatelist *gl, char *pinname)
    }
    if (type == CLOCK) nl->clock = TRUE;
 
-   if ((nl->type != OUTPUTPIN) && (gl == NULL)) {
+   if ((nl->type != INPUTPIN) && (nl->type != OUTPUTPIN) && (gl == NULL)) {
       fprintf(stderr, "\nError: no output gate for net %s\n", nodename);
       fflush(stderr);
    }
@@ -1168,11 +1168,11 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 			      /* recast "[X]_bF$bufN" as [X_bF$bufN]"	*/
 			      sprintf(spos, "_bF$buf%d]", i);
 			   }
-			   else if (*spos == '>') {
+			   else if (*spos == ']') {
 			      /* Avoid downstream problems:		*/
-			      /* recast "<X>_bF$bufN" as _X_bF$bufN"	*/
+			      /* recast "[X]_bF$bufN" as _X_bF$bufN"	*/
 			      char *dptr = nodename + slen - 1;
-			      while (dptr >= nodename && *dptr != '<') dptr--;
+			      while (dptr >= nodename && *dptr != '[') dptr--;
 			      if (dptr >= nodename) *dptr = '_';
 			      sprintf(spos, "_bF$buf%d", i);
 			   }
@@ -1261,11 +1261,11 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 		        /* recast "[X]_bF$bufN" as [X_bF$bufN]"	*/
 		        sprintf(spos, "_bF$buf%d]", nl->curcount);
 		     }
-		     else if (*spos == '>') {
+		     else if (*spos == ']') {
 		        /* Avoid downstream problems:		*/
-		        /* recast "<X>_bF$bufN" as _X_bF$bufN"	*/
+		        /* recast "[X]_bF$bufN" as _X_bF$bufN"	*/
 		        char *dptr = nodename + slen - 1;
-		        while (dptr >= nodename && *dptr != '<') dptr--;
+		        while (dptr >= nodename && *dptr != '[') dptr--;
 		        if (dptr >= nodename) *dptr = '_';
 		        sprintf(spos, "_bF$buf%d", nl->curcount);
 		     }

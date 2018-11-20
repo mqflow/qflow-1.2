@@ -141,6 +141,20 @@ else
    endif
 endif
 
+# Add hard macros
+
+hardmacrolibs = ""
+if ( ${?hard_macros} ) then
+   foreach macro_path ( $hard_macros )
+      foreach file ( `ls ${sourcedir}/${macro_path}` )
+         if ( ${file:e} == "lib" ) then
+            set hardmacrolibs="${hardmacrolibs} ${sourcedir}/${macro_path}/${file}"
+	 endif
+	 break
+      end
+   end
+endif
+
 #----------------------------------------------------------
 # Done with initialization
 #----------------------------------------------------------
@@ -227,6 +241,15 @@ echo "Creating OpenTimer input file ${rootname}.conf" |& tee -a ${synthlog}
 cat > ${rootname}.conf << EOF
 read_celllib -min ${libertyminpath}
 read_celllib -max ${libertymaxpath}
+EOF
+
+foreach libpath ( $hardmacrolibs )
+   cat >> ${rootname}.conf << EOF
+read_celllib ${libpath}
+EOF
+end
+
+cat >> ${rootname}.conf << EOF
 read_verilog ${rootname}.rtlbb.v
 EOF
 

@@ -113,8 +113,24 @@ endif
 set abspath=`echo ${libertyfile} | cut -c1`
 if ( "${abspath}" == "/" ) then
    set libertypath=${libertyfile}
+   set libertylist=${libertyfile}
 else
    set libertypath=${techdir}/${libertyfile}
+   set libertylist=${techdir}/${libertyfile}
+endif
+
+# Add hard macros
+
+if ( ${?hard_macros} ) then
+   foreach macro_path ( $hard_macros )
+      foreach file ( `ls ${sourcedir}/${macro_path}` )
+	 if ( ${file:e} == "lib" ) then
+	    set libertypath="${libertypath} -l ${sourcedir}/${macro_path}/${file}"
+	    set libertylist="${libertylist} ${sourcedir}/${macro_path}/${file}"
+	    break
+         endif
+      end
+   end
 endif
 
 #----------------------------------------------------------
@@ -215,11 +231,11 @@ if ($dodelays == 1) then
 else
    echo "Running vesta static timing analysis" |& tee -a ${synthlog}
 endif
-echo "vesta ${vesta_options} ${rootname}.rtlnopwr.v ${libertypath}" \
+echo "vesta ${vesta_options} ${rootname}.rtlnopwr.v ${libertylist}" \
 		|& tee -a ${synthlog}
 echo ""
 ${bindir}/vesta ${vesta_options} ${rootname}.rtlnopwr.v \
-		${libertypath} |& tee -a ${synthlog}
+		${libertylist} |& tee -a ${synthlog}
 echo ""
 
 #------------------------------------------------------------
