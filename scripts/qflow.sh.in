@@ -593,6 +593,16 @@ if ( ! -f ${userfile} ) then
    else
       echo \# set run_vesta = 0 >> ${userfile}
    endif
+   if ( ${?migrate_options} ) then
+      echo \# set migrate_options = \"${migrate_options}\" >> ${userfile}
+   else
+      echo \# set migrate_options = >> ${userfile}
+   endif
+   if ( ${?lef_options} ) then
+      echo \# set lef_options = \"${lef_options}\" >> ${userfile}
+   else
+      echo \# set lef_options = >> ${userfile}
+   endif
 
    echo "" >> ${userfile}
    echo "#------------------------------------------------------------" >> ${userfile}

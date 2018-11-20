@@ -65,6 +65,10 @@ if (! ${?migrate_options} ) then
    set migrate_options = ""
 endif
 
+if ( ! ${?lef_options} ) then
+   set lef_options = ""
+endif
+
 if (!($?logdir)) then
    set logdir=${projectpath}/log
 endif
@@ -170,7 +174,7 @@ end
 # Handle additional files from the hard macro list
 if ( ${?hard_macros} ) then
    foreach macro_path ( $hard_macros )
-      foreach file ( `ls ${sourcedir}/${macros_path}` )
+      foreach file ( `ls ${sourcedir}/${macro_path}` )
 	 if ( ${file:e} == "lef" ) then
 	    cat >> ${migratefile} << EOF
 lef read ${sourcedir}/${macro_path}/${file}"
@@ -220,7 +224,7 @@ EOF
 endif
 
 cat >> ${migratefile} << EOF
-lef write ${rootname}
+lef write ${rootname} ${lef_options}
 expand
 extract all
 ext2spice hierarchy on
