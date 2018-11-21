@@ -1419,10 +1419,11 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 		     int slen = strlen(glbest->gatename);
 
 		     if (glen != slen) {
-			// The size of the gatename increased, so reallocate
+			// The size of the gatename increased, so reallocate.
+			// Allow additional space for inserted buffer suffix.
 			if (slen > glen) {
 			    gateline = (char *)realloc(gateline, strlen(gateline)
-					+ 1 + slen - glen);
+					+ 10 + slen - glen);
 			    s = strstr(gateline, gl->gatename);
 			}
 			memmove(s + slen, s + glen, strlen(s + glen) + 1);
@@ -1460,8 +1461,9 @@ void write_output(int doLoadBalance, FILE *infptr, FILE *outfptr)
 	    gateline[0] = '\0';		/* Start a new line */
 	 }
       }
-      /* Append input line to gate */
-      gateline = (char *)realloc(gateline, strlen(gateline) + strlen(inputline) + 1);
+      /* Append input line to gate.  Always allow additional space for adding	*/
+      /* suffixes to inserted buffers (see above).				*/
+      gateline = (char *)realloc(gateline, strlen(gateline) + strlen(inputline) + 10);
       strcat(gateline, inputline);	/* Append input line to gate */
    }
    if (hasended == 0) fprintf(outfptr, ".end\n");
