@@ -983,7 +983,7 @@ void showgatelist(void)
      
       curcell = gl->gatecell;
       for (curpin = curcell->pins; curpin; curpin = curpin->next) {
-	 if (curpin->type == INPUT || curpin->type == CLOCK) {
+	 if (curpin->type == PIN_INPUT || curpin->type == PIN_CLOCK) {
 	    get_pincap(curcell, curpin->name, &pincap);
 	    printf("%g   ", pincap);
  	 }
