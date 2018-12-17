@@ -469,16 +469,6 @@ endif
 
 if ($makedef == 1) then
 
-   echo "Running getantennacell to determine cell to use for antenna anchors." \
-	|& tee -a ${synthlog}
-   echo "getantennacell.tcl $rootname ${lefpath} $antennacell" |& tee -a ${synthlog}
-   set useantennacell=`${scriptdir}/getantennacell.tcl $rootname \
-	${lefpath} $antennacell  | grep antenna= | cut -d= -f2 | cut -d/ -f1`
-
-   if ( "${useantennacell}" != "" ) then
-      echo "Using cell ${useantennacell} for antenna anchors" |& tee -a ${synthlog}
-   endif
-
    # Run getfillcell to determine which cell should be used for fill to
    # match the width specified for feedthroughs in the .par file.  If
    # nothing is returned by getfillcell, then either feedthroughs have
@@ -727,8 +717,8 @@ if ($makedef == 1) then
    # Scripted version continues with the read-in of the DEF file
 
    if (${scripting} == "T") then
-      if ("x$useantennacell" != "x") then
-	 echo "catch {qrouter::antenna init ${useantennacell}}" >> ${rootname}.cfg
+      if ("x$antennacell" != "x") then
+	 echo "catch {qrouter::antenna init ${antennacell}}" >> ${rootname}.cfg
       endif
       echo "read_def ${rootname}.def" >> ${rootname}.cfg
    endif

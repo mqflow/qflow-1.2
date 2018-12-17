@@ -322,13 +322,13 @@ while {[gets $flef line] >= 0} {
    if [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
       # Parse the "macro" statement
       parse_macro $flef $macroname
-      if {[string first $fillcell $macroname] == 0} {
+      if {$fillcell != "" && [regexp "^$fillcell" $macroname] == 1} {
 	 # Remember this for later if it's a plain fill cell
 	 lappend fillcells $macroname
-      } elseif {[string first $decapcell $macroname] == 0} {
+      } elseif {$decapcell != "" && [regexp "^$decapcell" $macroname] == 1} {
 	 # Remember this for later if it's a decap fill cell
 	 lappend decapcells $macroname
-      } elseif {[string first $antennacell $macroname] == 0} {
+      } elseif {$antennacell != "" && [regexp "^$antennacell" $macroname] == 1} {
 	 # Remember this for later if it's a antenna fill cell
 	 lappend antennacells $macroname
       }
@@ -389,7 +389,7 @@ if {$totalfills == 0} {
 }
 if {$usedfills == 0} {
    puts stdout "No fill cells in macro file ${lefname} are being used!"
-   foundcells = {}
+   set foundcells {}
    if {[llength $fillcells] > 0} {lappend foundcells $fillcell}
    if {[llength $decapcells] > 0} {lappend foundcells $decapcell}
    if {[llength $antennacells] > 0} {lappend foundcells $antennacell}

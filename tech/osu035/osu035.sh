@@ -55,9 +55,9 @@ set nandgate=NAND2X1	;# 2-input NAND gate, minimum drive strength
 set nandpin_in1=A	;# Name of first input pin to NAND gate
 set nandpin_in2=B	;# Name of second input pin to NAND gate
 set nandpin_out=Y	;# Name of output pin from NAND gate
-set fillcell=FILL	;# Spacer (filler) cell (prefix, if more than one)
-set decapcell=""	;# Decap (filler) cell (prefix, if more than one)
-set antennacell=""	;# Antenna (filler) cell (prefix, if more than one)
+set fillcell=FILL	;# Spacer (filler) cell (may use regexp)
+set decapcell=""	;# Decap (filler) cell (may use regexp)
+set antennacell=""	;# Antenna (filler) cell (may use regexp)
 set antennapin_in=""	;# Input pin name of antennta cell, if it exists
 
 set tiehi=""		;# Cell to connect to power, if one exists

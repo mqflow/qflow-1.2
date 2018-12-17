@@ -541,7 +541,7 @@ proc read_lef {flef fillcell} {
 	} elseif [regexp {[ \t]*MACRO[ \t]+([^ \t]+)[ \t]*$} $line lmatch macroname] {
 	    # Parse the "macro" statement
 	    parse_macro $flef $macroname
-	    if {[string first $fillcell $macroname] == 0} {
+	    if {[regexp "^$fillcell" $macroname] == 1} {
 		# Remember this for later if it's a fill cell
 		lappend fillcells $macroname
 	    }

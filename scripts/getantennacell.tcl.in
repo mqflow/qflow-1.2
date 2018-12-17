@@ -124,9 +124,9 @@ while {[gets $flef line] >= 0} {
    if [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
       # Parse the "macro" statement
       parse_macro $flef $macroname
-      if {[string first $antennacell $macroname] == 0} {
+      if {[regexp "^$antennacell" $macroname] == 1} {
 	 # Check width against feedthrough width
-	 puts stdout "Diagnostic:  macro $macroname input [subst \$${macroname}(pin)]"
+	 # puts stdout "Diagnostic:  macro $macroname input [subst \$${macroname}(pin)]"
 	 set useantennacell $macroname
 	 set useantennapin [subst \$${macroname}(pin)]
       }

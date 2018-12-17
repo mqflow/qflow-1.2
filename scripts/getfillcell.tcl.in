@@ -128,9 +128,9 @@ while {[gets $flef line] >= 0} {
    if [regexp {[ \t]*MACRO[ \t]+(.+)[ \t]*$} $line lmatch macroname] {
       # Parse the "macro" statement
       parse_macro $flef $macroname
-      if {[string first $fillcell $macroname] == 0} {
+      if {[regexp "^$fillcell" $macroname] == 1} {
 	 # Check width against feedthrough width
-	 puts stdout "Diagnostic:  macro $macroname width = [subst \$${macroname}(w)]"
+	 # puts stdout "Diagnostic:  macro $macroname width = [subst \$${macroname}(w)]"
 	 if {[subst \$${macroname}(w)] == $fwidth} {
 	    set usefillcell $macroname
 	 }
