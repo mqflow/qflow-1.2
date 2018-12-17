@@ -589,7 +589,7 @@ while {[gets $fcel line] >= 0} {
 
          # Calculate aggregate cell width
 	 set cellwidth [expr {$right - $left}]
-         puts stdout "Diagnostic: instance $instname cell width = $cellwidth"
+         # puts stdout "Diagnostic: instance $instname cell width = $cellwidth"
          incr aggwidth $cellwidth
 	 if {$instidx < 0} {
             puts $fanno $line	;# unknown cell, so output unchanged
@@ -611,8 +611,8 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr fillagg $cwid
 	       incr cellwidth $cwid
-               puts stdout "Diagnostic: add fill width = $cwid"
-               puts stdout "Diagnostic: new cell width = $cellwidth"
+               # puts stdout "Diagnostic: add fill width = $cwid"
+               # puts stdout "Diagnostic: new cell width = $cellwidth"
 	       if {$lastfill == ""} {
 		  set lastfill $cmac
 		  set lastwid $cwid
@@ -653,8 +653,8 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr decapagg $cwid
 	       incr cellwidth $cwid
-               puts stdout "Diagnostic: add decap width = $cwid"
-               puts stdout "Diagnostic: new cell width = $cellwidth"
+               # puts stdout "Diagnostic: add decap width = $cwid"
+               # puts stdout "Diagnostic: new cell width = $cellwidth"
 	       if {$lastfill == ""} {
 		  set lastfill $cmac
 		  set lastwid $cwid
@@ -695,8 +695,8 @@ while {[gets $fcel line] >= 0} {
 	       if {$cwid == 0} {break}
 	       incr antennaagg $cwid
 	       incr cellwidth $cwid
-               puts stdout "Diagnostic: add antenna width = $cwid"
-               puts stdout "Diagnostic: new cell width = $cellwidth"
+               # puts stdout "Diagnostic: add antenna width = $cwid"
+               # puts stdout "Diagnostic: new cell width = $cellwidth"
 	       if {$lastfill == ""} {
 		  set lastfill $cmac
 		  set lastwid $cwid
@@ -724,7 +724,7 @@ while {[gets $fcel line] >= 0} {
             
 	    puts $fanno "cell $instnum ${cstr}${instname}"
 
-            puts stdout "Diagnostic: final cell width = $cellwidth"
+            # puts stdout "Diagnostic: final cell width = $cellwidth"
 	    set fleft [expr {-($cellwidth / 2)}]
 	    set fright [expr {$fleft + $cellwidth}]
 	    puts $fanno "left $fleft right $fright $rest"

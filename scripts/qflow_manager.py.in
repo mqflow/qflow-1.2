@@ -2169,7 +2169,7 @@ class QflowManager(ttk.Frame):
                     if do_power:
                         linesub = 'set addspacers_options = "-stripe ' + str(power_width) + ' ' + str(power_pitch) + ' PG'
                         if power_space == 0:
-                            linesub += ' -nostretch"'
+                            linesub += ' -nostretch'
                         linesub += '"'
                     elif not is_comment:
                         linesub = '# set addspacers_options = "-stripe 5 200 PG -nostretch"'

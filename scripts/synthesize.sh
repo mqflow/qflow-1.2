@@ -139,7 +139,6 @@ else
 
 endif
 
-
 # Check if "yosys_options" specifies a script to use for yosys.
 if ( ! ${?yosys_options} ) then
    set yosys_options = ""

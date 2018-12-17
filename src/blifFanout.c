@@ -291,6 +291,7 @@ int main (int argc, char *argv[])
    InitializeHashTable(Nodehash);
    InitializeHashTable(Drivehash);
    InitializeHashTable(Gatehash);
+   InitializeHashTable(Basehash);
 
    fprintf(stdout, "blifFanout for qflow " QFLOW_VERSION "." QFLOW_REVISION "\n");
 
