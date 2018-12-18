@@ -2016,6 +2016,7 @@ class QflowManager(ttk.Frame):
         # grab the defaults from the file instead of setting
         # values that may be inappropriate for the process.
         powrdef = re.compile('#[ \t]*set addspacers_options =[ \t]*"-stripe ([0-9\.]+) ([0-9\.]+) PG[ ]*(.*)"$')
+        pow2rex = re.compile('[ \t]*set addspacers_options =[ \t]*""$')
 
         with open(varsfile, 'r') as ifile:
             varstext = ifile.read()
@@ -2079,6 +2080,12 @@ class QflowManager(ttk.Frame):
                     self.power_width.set(dmatch.group(1))
                     if 'nostretch' in dmatch.group(3):
                         self.power_space.set(0)
+
+                # Empty string for addspacers_options indicates option has been
+                # turned off manually although the default setting is on.
+                dmatch = pow2rex.match(line)
+                if dmatch:
+                    self.power.set(0)
         if remove:
             os.remove(varsfile)
         return True
@@ -2101,17 +2108,19 @@ class QflowManager(ttk.Frame):
         do_power = False
         if (self.power.get() == 1):
             do_power = True
-            try:
-                power_width = float(self.power_width.get())
-            except:
-                self.print("Error:  Power rail width is not a number, setting to 5.0", file=sys.stderr)
-                power_width = 5.0
-            try:
-                power_pitch = float(self.power_pitch.get())
-            except:
-                self.print("Error:  Power rail pitch is not a number, setting to 150.0", file=sys.stderr)
-                power_pitch = 150.0
-            power_space = self.power_space.get()
+
+        # Power striping values are not dependent on do_power
+        try:
+            power_width = float(self.power_width.get())
+        except:
+            self.print("Error:  Power rail width is not a number, setting to 5.0", file=sys.stderr)
+            power_width = 5.0
+        try:
+            power_pitch = float(self.power_pitch.get())
+        except:
+            self.print("Error:  Power rail pitch is not a number, setting to 150.0", file=sys.stderr)
+            power_pitch = 150.0
+        power_space = self.power_space.get()
 
         do_long = False
         if (self.long_format.get() == 1):
@@ -2156,6 +2165,7 @@ class QflowManager(ttk.Frame):
             vartext = ifile.read()
             varlines = vartext.splitlines()
             newlines = []
+            seenpwr = False
             for line in varlines:
                 linesub = line
                 is_comment = commentrex.match(line)
@@ -2166,13 +2176,21 @@ class QflowManager(ttk.Frame):
                         linesub = '# set initial_density = '
 
                 if powrrex.match(line):
-                    if do_power:
-                        linesub = 'set addspacers_options = "-stripe ' + str(power_width) + ' ' + str(power_pitch) + ' PG'
-                        if power_space == 0:
-                            linesub += ' -nostretch'
-                        linesub += '"'
-                    elif not is_comment:
-                        linesub = '# set addspacers_options = "-stripe 5 200 PG -nostretch"'
+                    if seenpwr:
+                        continue
+                    seenpwr = True
+                    linesub = ''
+                    if not do_power:
+                        linesub = '# '
+                    linesub += 'set addspacers_options = "-stripe ' + str(power_width) + ' ' + str(power_pitch) + ' PG'
+                    if power_space == 0:
+                        linesub += ' -nostretch'
+                    linesub += '"'
+                    if not do_power:
+                        # Copy addspacers_options to a comment so it is not used but
+                        # can be found and the values read back.
+                        newlines.append(linesub)
+                        linesub = 'set addspacers_options = ""'
 
                 if vstarex.match(line):
                     if do_long:
