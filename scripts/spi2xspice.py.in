@@ -11,6 +11,9 @@
 # Written by Tim Edwards
 # efabless, inc. 2017
 # May 17, 2017
+# Updated Dec. 22, 2018 to accomodate in-lined standard cell subcircuits
+# (i.e., not from a .include statement) and corrected duplicate .end statement.
+#
 # This script is in the public domain
 #--------------------------------------------------------------------------
 
@@ -75,6 +78,8 @@ def read_spice_lib(filein, celldefs, debug):
                     # is on the first line.
                     cellrec = celldefs[subname]
                     cellrec['spicepins'] = lmatch.group(2).split()
+                    if debug:
+                        print('spicepins is ' + str(cellrec['spicepins']))
 
                 # Read to the ".ends" statement.
                 insub = True
@@ -199,6 +204,7 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
     xrex   = re.compile('^[ \t]*X([^ \t]+)(.*)$', re.IGNORECASE)
     comrex = re.compile('^[\*]+.*$', re.IGNORECASE)
     endsrex = re.compile('^[^\*]*[ \t]*.ends.*$', re.IGNORECASE)
+    endrex = re.compile('^[^\*]*[ \t]*.end.*$', re.IGNORECASE)
 
     # Merge continuation lines in input
     spilines = spitext.replace('\n+', ' ').splitlines()
@@ -211,11 +217,26 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
 
     cellsused = []
 
+    # Make first pass to determine if there is more than one subcircuit in
+    # the main file.
+    subcount = 0
+    subfound = False
+    for line in spilines:
+        cmatch = comrex.match(line)
+        if cmatch:
+            continue
+        lmatch = subrex.match(line)
+        if lmatch:
+            subcount += 1
+            if lmatch.group(1) == subname:
+                subfound = True
+
     print("Writing xspice file")
     with open(fileout, 'w') as ofile:
         print("* XSpice netlist created from SPICE and liberty sources by spi2xspice.py", file=ofile)
         echoout = False
         lineno = 0
+        skipsub = False
         for line in spilines:
             lineno += 1
 
@@ -260,6 +281,8 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
 
                 if not 'spicepins' in cellrec:
                     print('Cell ' + cellname + ' does not have SPICE pin order defined!')
+                    if debug:
+                        print('Cell record is: ' + str(cellrec))
                     continue
 
                 # Print the record.  Special handling for flops and latches.
@@ -469,13 +492,23 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
                 continue
 
             lmatch = subrex.match(line)
-            if lmatch:
-                # To do:  Maybe handle the difference between subcircuit and file name
-                # better?  For now, just take the first subcircuit found and run with it.
-                if lmatch.group(1) != subname:
-                    subname = lmatch.group(1)
 
-                if lmatch.group(1) == subname:
+            if lmatch:
+                subcktname = lmatch.group(1)
+                if subcktname != subname and subcount != 1:
+                    # Get pin names and pin order in the subcircuit                
+                    if subcktname in celldefs:
+                        cellrec = celldefs[subcktname]
+                    else:
+                        cellrec = {}
+                        celldefs[subcktname] = cellrec 
+                    cellrec['spicepins'] = lmatch.group(2).split()
+                    if debug:
+                        print('subckt ' + subcktname + ' pins = ' + str(cellrec['spicepins']))
+                    skipsub = True
+
+                else:
+                    subname = subcktname
                     echoout = False
                     if debug:
                         print("Found subcircuit " + subname)
@@ -493,13 +526,11 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
                     for pin in pins:
                         print(' a_' + pin, end='', file=ofile)
                     print('', file=ofile)
- 
-                else:
-                    print('Unexpected subcircuit ' + lmatch.group(1) + ' found in netlist.')
-                    echoout = True
 
             ematch = endsrex.match(line)
-            if ematch:
+            if ematch and skipsub:
+                skipsub = False
+            elif ematch:
                 if not echoout:
                     # Write A-to-D and D-to-A bridge models
                     print("", file=ofile)
@@ -530,7 +561,12 @@ def read_spice(filein, fileout, celldefs, debug, modelfile):
 
                 echoout =  True
 
-            if echoout:
+            if not ematch:
+                endline = endrex.match(line)
+            else:
+                endline = None
+
+            if echoout and not endline:
                 print(line, file=ofile)
 
         # At the end, write all of the LUT-based digital models.
